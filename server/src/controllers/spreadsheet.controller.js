@@ -1,11 +1,10 @@
 const mongoose = require("mongoose");
-const SpreadsheetSheet = require("../models/SpreadsheetSheet");
-const SpreadsheetRow = require("../models/SpreadsheetRow");
-const SpreadsheetRowGroup = require("../models/SpreadsheetRowGroup");
+const SpreadsheetSheetData = require("../models/SpreadsheetSheetData");
 const SpreadsheetWorkbook = require("../models/SpreadsheetWorkbook");
 const Event = require("../models/Event");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
+const { applyOp } = require("../utils/applyOp");
 
 // Helper: get Socket.io instance (safe)
 const getIO = () => {
@@ -13,14 +12,6 @@ const getIO = () => {
     return require("../config/socket").getIO();
   } catch {
     return null;
-  }
-};
-
-// Helper: emit to sheet room
-const emitSheetEvent = (sheetId, event, data) => {
-  const io = getIO();
-  if (io) {
-    io.to(`sheet:${sheetId}`).emit(event, data);
   }
 };
 
@@ -39,92 +30,52 @@ const verifyEvent = async (eventId, workspaceId) => {
 };
 
 // ════════════════════════════════════════════════
-// WORKBOOK (FortuneSheet native data structure)
+// MIGRATION: Legacy SpreadsheetWorkbook → per-sheet docs
 // ════════════════════════════════════════════════
 
-async function buildWorkbookFromLegacy(eventId) {
-  const sheets = await SpreadsheetSheet.find({ eventId }).sort({ order: 1 }).lean();
-
-  const workbookData = [];
-
-  for (let i = 0; i < sheets.length; i++) {
-    const sheet = sheets[i];
-    const rows = await SpreadsheetRow.find({ sheetId: sheet._id }).sort({ order: 1 }).lean();
-
-    const columns = [...(sheet.columns || [])].sort((a, b) => a.order - b.order);
-    const celldata = [];
-
-    // Header row
-    columns.forEach((col, colIdx) => {
-      celldata.push({
-        r: 0,
-        c: colIdx,
-        v: {
-          v: col.name,
-          m: col.name,
-          ct: { fa: "General", t: "g" },
-          bl: 1,
-          fc: "#1e293b",
-          bg: "#f1f5f9",
-        },
-      });
-    });
-
-    // Data rows
-    rows.forEach((row, rowIdx) => {
-      columns.forEach((col, colIdx) => {
-        const colKey = col._id.toString();
-        const cellValue = row.cells
-          ? row.cells instanceof Map
-            ? row.cells.get(colKey)
-            : row.cells[colKey]
-          : undefined;
-
-        if (cellValue !== "" && cellValue !== null && cellValue !== undefined) {
-          celldata.push({
-            r: rowIdx + 1,
-            c: colIdx,
-            v: { v: cellValue, m: String(cellValue), ct: { fa: "General", t: "g" } },
-          });
-        }
-      });
-    });
-
-    workbookData.push({
-      name: sheet.name,
-      id: sheet._id.toString(),
-      status: i === 0 ? 1 : 0,
-      order: sheet.order ?? i,
-      row: Math.max(rows.length + 30, 50),
-      column: Math.max(columns.length + 5, 26),
-      celldata,
-      config: {
-        columnlen: columns.reduce((acc, col, idx) => {
-          acc[idx] = col.width || 150;
-          return acc;
-        }, {}),
-      },
-    });
+async function migrateFromLegacyWorkbook(eventId) {
+  const legacy = await SpreadsheetWorkbook.findOne({ eventId }).lean();
+  if (!legacy || !Array.isArray(legacy.data) || legacy.data.length === 0) {
+    return false;
   }
 
-  // If no legacy sheets exist, still return one default sheet
-  if (workbookData.length === 0) {
-    workbookData.push({
-      name: "Sheet1",
-      id: "0",
-      status: 1,
-      order: 0,
-      row: 84,
-      column: 60,
-      celldata: [],
-      config: {},
-    });
+  // Check if we already have per-sheet docs for this event
+  const existingCount = await SpreadsheetSheetData.countDocuments({ eventId });
+  if (existingCount > 0) {
+    return true; // Already migrated
   }
 
-  return workbookData;
+  // Insert each sheet as its own document
+  const docs = legacy.data.map((sheet) => {
+    const { _id, ...rest } = sheet; // Remove any stale _id
+    return {
+      eventId,
+      id: sheet.id || sheet.index || String(mongoose.Types.ObjectId()),
+      name: sheet.name || "Sheet1",
+      celldata: sheet.celldata || [],
+      order: sheet.order ?? 0,
+      row: sheet.row || 84,
+      column: sheet.column || 60,
+      status: sheet.status ?? 0,
+      config: sheet.config || {},
+      ...rest,
+    };
+  });
+
+  await SpreadsheetSheetData.insertMany(docs, { ordered: false }).catch(
+    (err) => {
+      // Ignore duplicate key errors (in case of race condition)
+      if (err.code !== 11000) throw err;
+    },
+  );
+
+  return true;
 }
 
-// GET /sheets/workbook — get workbook data (auto-migrate from legacy if missing)
+// ════════════════════════════════════════════════
+// GET WORKBOOK — Returns all sheets for an event
+// ════════════════════════════════════════════════
+
 exports.getWorkbook = catchAsync(async (req, res, next) => {
   const { eventId } = req.params;
   const workspace = req.workspace;
@@ -132,27 +83,51 @@ exports.getWorkbook = catchAsync(async (req, res, next) => {
   const event = await verifyEvent(eventId, workspace._id);
   if (!event) return next(new AppError("Event tidak ditemukan", 404));
 
-  let workbook = await SpreadsheetWorkbook.findOne({ eventId }).lean();
+  // Try migration from legacy blob if no per-sheet docs exist
+  let sheets = await SpreadsheetSheetData.find({ eventId })
+    .sort({ order: 1 })
+    .lean();
 
-  if (!workbook) {
-    const data = await buildWorkbookFromLegacy(eventId);
-    const created = await SpreadsheetWorkbook.create({
+  if (sheets.length === 0) {
+    await migrateFromLegacyWorkbook(eventId);
+    sheets = await SpreadsheetSheetData.find({ eventId })
+      .sort({ order: 1 })
+      .lean();
+  }
+
+  // If still no sheets, create a default one
+  if (sheets.length === 0) {
+    const defaultSheet = await SpreadsheetSheetData.create({
       eventId,
-      data,
-      version: 1,
-      updatedBy: req.user?.id || null,
+      id: String(new mongoose.Types.ObjectId()),
+      name: "Sheet1",
+      celldata: [{ r: 0, c: 0, v: null }],
+      order: 0,
+      row: 84,
+      column: 60,
+      status: 1,
+      config: {},
     });
-    workbook = created.toObject();
+    sheets = [defaultSheet.toObject()];
   }
+
+  // Clean up MongoDB _id from response (fortune-sheet expects `id` not `_id`)
+  const data = sheets.map((s) => {
+    const { _id, __v, eventId: _eid, createdAt, updatedAt, ...rest } = s;
+    return rest;
+  });
 
   res.status(200).json({
     status: "success",
-    data: { workbook: { eventId, data: workbook.data, version: workbook.version } },
+    data: { workbook: { eventId, data } },
   });
 });
 
-// PUT /sheets/workbook — replace workbook data (FortuneSheet native structure)
-exports.updateWorkbook = catchAsync(async (req, res, next) => {
+// ════════════════════════════════════════════════
+// APPLY OPS — Persist ops and broadcast
+// ════════════════════════════════════════════════
+
+exports.applyOps = catchAsync(async (req, res, next) => {
   const { eventId } = req.params;
   const workspace = req.workspace;
   const userId = req.user.id;
@@ -160,979 +135,24 @@ exports.updateWorkbook = catchAsync(async (req, res, next) => {
   const event = await verifyEvent(eventId, workspace._id);
   if (!event) return next(new AppError("Event tidak ditemukan", 404));
 
-  const { data, version } = req.body;
-  if (!Array.isArray(data)) {
-    return next(new AppError("Workbook data harus berupa array sheet", 400));
+  const { ops } = req.body;
+  if (!Array.isArray(ops) || ops.length === 0) {
+    return next(new AppError("ops harus berupa array", 400));
   }
 
-  const update = {
-    data,
-    updatedBy: userId,
-    $inc: { version: 1 },
-  };
+  // Apply ops to MongoDB
+  await applyOp(SpreadsheetSheetData, eventId, ops);
 
-  // Optional optimistic concurrency: if client sends version, require match
-  const filter = { eventId };
-  if (version !== undefined && version !== null) {
-    filter.version = version;
-  }
-
-  const updated = await SpreadsheetWorkbook.findOneAndUpdate(filter, update, {
-    new: true,
-    upsert: true,
-  }).lean();
-
-  // Notify others (simple: broadcast full workbook data)
-  emitWorkbookEvent(eventId.toString(), "workbook:updated", {
+  // Broadcast to other users in the workbook room
+  emitWorkbookEvent(eventId.toString(), "workbook:op", {
     eventId,
-    data: updated.data,
-    version: updated.version,
+    ops,
     userId,
   });
 
   res.status(200).json({
     status: "success",
-    data: { workbook: { eventId, data: updated.data, version: updated.version } },
-  });
-});
-
-// ════════════════════════════════════════════════
-// SHEET CRUD
-// ════════════════════════════════════════════════
-
-// GET /sheets — Daftar sheet
-exports.listSheets = catchAsync(async (req, res, next) => {
-  const { eventId } = req.params;
-  const workspace = req.workspace;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheets = await SpreadsheetSheet.find({ eventId })
-    .sort({ order: 1 })
-    .lean();
-
-  res.status(200).json({
-    status: "success",
-    data: { sheets },
-  });
-});
-
-// POST /sheets — Buat sheet baru
-exports.createSheet = catchAsync(async (req, res, next) => {
-  const { eventId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const { name } = req.body;
-
-  // Get next order
-  const lastSheet = await SpreadsheetSheet.findOne({ eventId })
-    .sort({ order: -1 })
-    .select("order");
-  const nextOrder = lastSheet ? lastSheet.order + 1 : 0;
-
-  const sheet = await SpreadsheetSheet.create({
-    eventId,
-    name: name?.trim() || `Sheet ${nextOrder + 1}`,
-    order: nextOrder,
-    columns: [
-      { name: "Kolom 1", type: "text", order: 0, width: 200 },
-    ],
-  });
-
-  // Create one empty row
-  await SpreadsheetRow.create({
-    sheetId: sheet._id,
-    order: 0,
-    cells: {},
-  });
-
-  const sheetData = sheet.toObject();
-
-  // Emit to workspace (all users viewing this event)
-  emitSheetEvent(eventId.toString(), "sheet:created", {
-    sheet: sheetData,
-    userId,
-  });
-
-  res.status(201).json({
-    status: "success",
-    data: { sheet: sheetData },
-  });
-});
-
-// PUT /sheets/:sheetId — Update sheet (rename)
-exports.updateSheet = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({
-    _id: sheetId,
-    eventId,
-  });
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const { name } = req.body;
-  if (name !== undefined) {
-    if (!name.trim()) {
-      return next(new AppError("Nama sheet tidak boleh kosong", 400));
-    }
-    sheet.name = name.trim();
-  }
-
-  await sheet.save();
-  const sheetData = sheet.toObject();
-
-  emitSheetEvent(sheetId, "sheet:updated", {
-    sheet: sheetData,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: { sheet: sheetData },
-  });
-});
-
-// DELETE /sheets/:sheetId — Hapus sheet
-exports.deleteSheet = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  // Check it's not the last sheet
-  const sheetCount = await SpreadsheetSheet.countDocuments({ eventId });
-  if (sheetCount <= 1) {
-    return next(new AppError("Tidak bisa menghapus sheet terakhir", 400));
-  }
-
-  const sheet = await SpreadsheetSheet.findOne({
-    _id: sheetId,
-    eventId,
-  });
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  // Delete all rows and groups in this sheet
-  await Promise.all([
-    SpreadsheetRow.deleteMany({ sheetId }),
-    SpreadsheetRowGroup.deleteMany({ sheetId }),
-    sheet.deleteOne(),
-  ]);
-
-  emitSheetEvent(eventId.toString(), "sheet:deleted", {
-    sheetId,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    message: "Sheet berhasil dihapus",
-  });
-});
-
-// POST /sheets/:sheetId/duplicate — Duplikasi sheet
-exports.duplicateSheet = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sourceSheet = await SpreadsheetSheet.findOne({
-    _id: sheetId,
-    eventId,
-  }).lean();
-  if (!sourceSheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  // Get next order
-  const lastSheet = await SpreadsheetSheet.findOne({ eventId })
-    .sort({ order: -1 })
-    .select("order");
-  const nextOrder = lastSheet ? lastSheet.order + 1 : 0;
-
-  // Create column ID mapping (old → new)
-  const columnIdMap = {};
-  const newColumns = sourceSheet.columns.map((col) => {
-    const newCol = { ...col };
-    delete newCol._id;
-    const newId = new mongoose.Types.ObjectId();
-    columnIdMap[col._id.toString()] = newId.toString();
-    newCol._id = newId;
-    return newCol;
-  });
-
-  // Create new sheet
-  const newSheet = await SpreadsheetSheet.create({
-    eventId,
-    name: `${sourceSheet.name} (Copy)`,
-    order: nextOrder,
-    columns: newColumns,
-  });
-
-  // Copy rows
-  const sourceRows = await SpreadsheetRow.find({
-    sheetId: sourceSheet._id,
-  })
-    .sort({ order: 1 })
-    .lean();
-
-  // Copy groups
-  const sourceGroups = await SpreadsheetRowGroup.find({
-    sheetId: sourceSheet._id,
-  }).lean();
-
-  const groupIdMap = {};
-  if (sourceGroups.length > 0) {
-    const newGroups = sourceGroups.map((g) => {
-      const newGroupId = new mongoose.Types.ObjectId();
-      groupIdMap[g._id.toString()] = newGroupId;
-      return {
-        _id: newGroupId,
-        sheetId: newSheet._id,
-        name: g.name,
-        parentGroupId: null, // Will be re-mapped below
-        isCollapsed: g.isCollapsed,
-        order: g.order,
-      };
-    });
-
-    // Re-map parent groups
-    newGroups.forEach((g, i) => {
-      const sourceGroup = sourceGroups[i];
-      if (sourceGroup.parentGroupId) {
-        g.parentGroupId =
-          groupIdMap[sourceGroup.parentGroupId.toString()] || null;
-      }
-    });
-
-    await SpreadsheetRowGroup.insertMany(newGroups);
-  }
-
-  if (sourceRows.length > 0) {
-    const newRows = sourceRows.map((row) => {
-      // Remap cell keys (column IDs)
-      const newCells = {};
-      if (row.cells) {
-        const cellEntries =
-          row.cells instanceof Map
-            ? Array.from(row.cells.entries())
-            : Object.entries(row.cells);
-        for (const [oldColId, value] of cellEntries) {
-          const newColId = columnIdMap[oldColId] || oldColId;
-          newCells[newColId] = value;
-        }
-      }
-
-      return {
-        sheetId: newSheet._id,
-        order: row.order,
-        groupId: row.groupId
-          ? groupIdMap[row.groupId.toString()] || null
-          : null,
-        cells: newCells,
-      };
-    });
-
-    await SpreadsheetRow.insertMany(newRows);
-  }
-
-  const sheetData = newSheet.toObject();
-
-  emitSheetEvent(eventId.toString(), "sheet:created", {
-    sheet: sheetData,
-    userId,
-  });
-
-  res.status(201).json({
-    status: "success",
-    data: { sheet: sheetData },
-  });
-});
-
-// PUT /sheets/reorder — Reorder sheets
-exports.reorderSheets = catchAsync(async (req, res, next) => {
-  const { eventId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const { sheetOrders } = req.body;
-  // sheetOrders: [{ sheetId: "...", order: 0 }, ...]
-
-  if (!Array.isArray(sheetOrders) || sheetOrders.length === 0) {
-    return next(new AppError("Data reorder harus berupa array", 400));
-  }
-
-  const bulkOps = sheetOrders.map(({ sheetId, order }) => ({
-    updateOne: {
-      filter: { _id: sheetId, eventId },
-      update: { $set: { order } },
-    },
-  }));
-
-  await SpreadsheetSheet.bulkWrite(bulkOps);
-
-  const sheets = await SpreadsheetSheet.find({ eventId })
-    .sort({ order: 1 })
-    .lean();
-
-  emitSheetEvent(eventId.toString(), "sheet:reordered", {
-    sheets,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: { sheets },
-  });
-});
-
-// ════════════════════════════════════════════════
-// SHEET DATA (rows + groups)
-// ════════════════════════════════════════════════
-
-// GET /sheets/all-data — Get ALL sheets with their rows in one request
-exports.getAllSheetsWithData = catchAsync(async (req, res, next) => {
-  const { eventId } = req.params;
-  const workspace = req.workspace;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheets = await SpreadsheetSheet.find({ eventId })
-    .sort({ order: 1 })
-    .lean();
-
-  const sheetsData = await Promise.all(
-    sheets.map(async (sheet) => {
-      const [rows, groups] = await Promise.all([
-        SpreadsheetRow.find({ sheetId: sheet._id }).sort({ order: 1 }).lean(),
-        SpreadsheetRowGroup.find({ sheetId: sheet._id })
-          .sort({ order: 1 })
-          .lean(),
-      ]);
-      return { sheet, rows, groups };
-    }),
-  );
-
-  res.status(200).json({
-    status: "success",
-    data: { sheets: sheetsData },
-  });
-});
-
-// GET /sheets/:sheetId/data — Ambil semua data sheet
-exports.getSheetData = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({
-    _id: sheetId,
-    eventId,
-  }).lean();
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const [rows, groups] = await Promise.all([
-    SpreadsheetRow.find({ sheetId }).sort({ order: 1 }).lean(),
-    SpreadsheetRowGroup.find({ sheetId }).sort({ order: 1 }).lean(),
-  ]);
-
-  res.status(200).json({
-    status: "success",
-    data: { sheet, rows, groups },
-  });
-});
-
-// ════════════════════════════════════════════════
-// COLUMN CRUD
-// ════════════════════════════════════════════════
-
-// POST /sheets/:sheetId/columns — Tambah kolom
-exports.addColumn = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({ _id: sheetId, eventId });
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const {
-    name,
-    type = "text",
-    width = 150,
-    options,
-    numberFormat,
-  } = req.body;
-
-  if (!name || !name.trim()) {
-    return next(new AppError("Nama kolom harus diisi", 400));
-  }
-
-  // Next order
-  const maxOrder = sheet.columns.reduce(
-    (max, col) => Math.max(max, col.order),
-    -1,
-  );
-
-  const newColumn = {
-    name: name.trim(),
-    type,
-    order: maxOrder + 1,
-    width,
-    options: type === "dropdown" ? options || [] : undefined,
-    numberFormat: type === "number" ? numberFormat || "plain" : undefined,
-  };
-
-  sheet.columns.push(newColumn);
-  await sheet.save();
-
-  const addedColumn = sheet.columns[sheet.columns.length - 1].toObject();
-
-  emitSheetEvent(sheetId, "sheet:column:added", {
-    sheetId,
-    column: addedColumn,
-    userId,
-  });
-
-  res.status(201).json({
-    status: "success",
-    data: { column: addedColumn },
-  });
-});
-
-// PUT /sheets/:sheetId/columns/:colId — Update kolom
-exports.updateColumn = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId, colId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({ _id: sheetId, eventId });
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const column = sheet.columns.id(colId);
-  if (!column) return next(new AppError("Kolom tidak ditemukan", 404));
-
-  const { name, type, width, options, numberFormat, formula, isFrozen } =
-    req.body;
-
-  if (name !== undefined) {
-    if (!name.trim()) {
-      return next(new AppError("Nama kolom tidak boleh kosong", 400));
-    }
-    column.name = name.trim();
-  }
-
-  if (type !== undefined) column.type = type;
-  if (width !== undefined) column.width = width;
-  if (options !== undefined) column.options = options;
-  if (numberFormat !== undefined) column.numberFormat = numberFormat;
-  if (formula !== undefined) column.formula = formula;
-  if (isFrozen !== undefined) column.isFrozen = isFrozen;
-
-  await sheet.save();
-
-  const updatedColumn = column.toObject();
-
-  emitSheetEvent(sheetId, "sheet:column:updated", {
-    sheetId,
-    columnId: colId,
-    column: updatedColumn,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: { column: updatedColumn },
-  });
-});
-
-// DELETE /sheets/:sheetId/columns/:colId — Hapus kolom
-exports.deleteColumn = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId, colId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({ _id: sheetId, eventId });
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const column = sheet.columns.id(colId);
-  if (!column) return next(new AppError("Kolom tidak ditemukan", 404));
-
-  // Remove column from sheet
-  sheet.columns.pull(colId);
-  await sheet.save();
-
-  // Remove cell data for this column from all rows
-  await SpreadsheetRow.updateMany(
-    { sheetId },
-    { $unset: { [`cells.${colId}`]: "" } },
-  );
-
-  emitSheetEvent(sheetId, "sheet:column:deleted", {
-    sheetId,
-    columnId: colId,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    message: "Kolom berhasil dihapus",
-  });
-});
-
-// PUT /sheets/:sheetId/columns/reorder — Reorder kolom
-exports.reorderColumns = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({ _id: sheetId, eventId });
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const { columnOrders } = req.body;
-  // columnOrders: [{ columnId: "...", order: 0 }, ...]
-
-  if (!Array.isArray(columnOrders)) {
-    return next(new AppError("Data reorder harus berupa array", 400));
-  }
-
-  columnOrders.forEach(({ columnId, order }) => {
-    const col = sheet.columns.id(columnId);
-    if (col) col.order = order;
-  });
-
-  await sheet.save();
-
-  const sortedColumns = sheet.columns
-    .map((c) => c.toObject())
-    .sort((a, b) => a.order - b.order);
-
-  emitSheetEvent(sheetId, "sheet:column:reordered", {
-    sheetId,
-    columnOrders: sortedColumns,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: { columns: sortedColumns },
-  });
-});
-
-// ════════════════════════════════════════════════
-// ROW CRUD
-// ════════════════════════════════════════════════
-
-// POST /sheets/:sheetId/rows — Tambah baris
-exports.addRow = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({
-    _id: sheetId,
-    eventId,
-  }).lean();
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const { cells = {}, groupId = null, insertAfterOrder } = req.body;
-
-  let order;
-  if (insertAfterOrder !== undefined) {
-    // Insert after a specific row — shift subsequent rows
-    order = insertAfterOrder + 1;
-    await SpreadsheetRow.updateMany(
-      { sheetId, order: { $gte: order } },
-      { $inc: { order: 1 } },
-    );
-  } else {
-    // Add to end
-    const lastRow = await SpreadsheetRow.findOne({ sheetId })
-      .sort({ order: -1 })
-      .select("order");
-    order = lastRow ? lastRow.order + 1 : 0;
-  }
-
-  const row = await SpreadsheetRow.create({
-    sheetId,
-    order,
-    groupId,
-    cells,
-  });
-
-  const rowData = row.toObject();
-
-  emitSheetEvent(sheetId, "sheet:row:added", {
-    sheetId,
-    row: rowData,
-    userId,
-  });
-
-  res.status(201).json({
-    status: "success",
-    data: { row: rowData },
-  });
-});
-
-// PUT /sheets/:sheetId/rows/:rowId — Update cell data
-exports.updateRow = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId, rowId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const row = await SpreadsheetRow.findOne({ _id: rowId, sheetId });
-  if (!row) return next(new AppError("Baris tidak ditemukan", 404));
-
-  const { cells, groupId } = req.body;
-
-  // Update individual cells (merge, don't replace)
-  if (cells) {
-    for (const [columnId, value] of Object.entries(cells)) {
-      if (value === null || value === undefined) {
-        row.cells.delete(columnId);
-      } else {
-        row.cells.set(columnId, value);
-      }
-    }
-  }
-
-  if (groupId !== undefined) {
-    row.groupId = groupId;
-  }
-
-  await row.save();
-
-  const rowData = row.toObject();
-
-  // Emit per-cell updates for real-time sync
-  if (cells) {
-    for (const [columnId, value] of Object.entries(cells)) {
-      emitSheetEvent(sheetId, "sheet:cell:updated", {
-        sheetId,
-        rowId,
-        columnId,
-        value,
-        userId,
-      });
-    }
-  }
-
-  res.status(200).json({
-    status: "success",
-    data: { row: rowData },
-  });
-});
-
-// DELETE /sheets/:sheetId/rows/:rowId — Hapus baris
-exports.deleteRow = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId, rowId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const row = await SpreadsheetRow.findOne({ _id: rowId, sheetId });
-  if (!row) return next(new AppError("Baris tidak ditemukan", 404));
-
-  await row.deleteOne();
-
-  emitSheetEvent(sheetId, "sheet:row:deleted", {
-    sheetId,
-    rowId,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    message: "Baris berhasil dihapus",
-  });
-});
-
-// PUT /sheets/:sheetId/rows/batch — Batch update (paste)
-exports.batchUpdateRows = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const sheet = await SpreadsheetSheet.findOne({
-    _id: sheetId,
-    eventId,
-  }).lean();
-  if (!sheet) return next(new AppError("Sheet tidak ditemukan", 404));
-
-  const { updates } = req.body;
-  // updates: [{ rowId: "...", cells: { colId: value } }, ...]
-  // For new rows: [{ cells: { colId: value }, order: n }, ...]
-
-  if (!Array.isArray(updates) || updates.length === 0) {
-    return next(new AppError("Data batch update harus berupa array", 400));
-  }
-
-  const results = [];
-
-  for (const update of updates) {
-    if (update.rowId) {
-      // Update existing row
-      const row = await SpreadsheetRow.findOne({
-        _id: update.rowId,
-        sheetId,
-      });
-      if (row && update.cells) {
-        for (const [columnId, value] of Object.entries(update.cells)) {
-          if (value === null || value === undefined) {
-            row.cells.delete(columnId);
-          } else {
-            row.cells.set(columnId, value);
-          }
-        }
-        await row.save();
-        results.push(row.toObject());
-      }
-    } else {
-      // Create new row
-      const lastRow = await SpreadsheetRow.findOne({ sheetId })
-        .sort({ order: -1 })
-        .select("order");
-      const order = lastRow ? lastRow.order + 1 : 0;
-
-      const newRow = await SpreadsheetRow.create({
-        sheetId,
-        order: update.order !== undefined ? update.order : order,
-        cells: update.cells || {},
-      });
-      results.push(newRow.toObject());
-    }
-  }
-
-  emitSheetEvent(sheetId, "sheet:rows:batch:updated", {
-    sheetId,
-    rows: results,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: { rows: results },
-  });
-});
-
-// DELETE /sheets/:sheetId/rows/batch — Batch delete rows
-exports.batchDeleteRows = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const { rowIds } = req.body;
-
-  if (!Array.isArray(rowIds) || rowIds.length === 0) {
-    return next(new AppError("rowIds harus berupa array", 400));
-  }
-
-  await SpreadsheetRow.deleteMany({ _id: { $in: rowIds }, sheetId });
-
-  emitSheetEvent(sheetId, "sheet:rows:batch:deleted", {
-    sheetId,
-    rowIds,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    message: `${rowIds.length} baris berhasil dihapus`,
-  });
-});
-
-// ════════════════════════════════════════════════
-// ROW GROUP CRUD
-// ════════════════════════════════════════════════
-
-// POST /sheets/:sheetId/groups — Buat group
-exports.createGroup = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const { name, parentGroupId = null, rowIds = [] } = req.body;
-
-  if (!name || !name.trim()) {
-    return next(new AppError("Nama grup harus diisi", 400));
-  }
-
-  // Validate nesting depth (max 1 level)
-  if (parentGroupId) {
-    const parentGroup = await SpreadsheetRowGroup.findById(parentGroupId);
-    if (!parentGroup) {
-      return next(new AppError("Parent group tidak ditemukan", 404));
-    }
-    if (parentGroup.parentGroupId) {
-      return next(
-        new AppError("Grup hanya bisa nested 1 level", 400),
-      );
-    }
-  }
-
-  // Get next order
-  const lastGroup = await SpreadsheetRowGroup.findOne({ sheetId })
-    .sort({ order: -1 })
-    .select("order");
-  const nextOrder = lastGroup ? lastGroup.order + 1 : 0;
-
-  const group = await SpreadsheetRowGroup.create({
-    sheetId,
-    name: name.trim(),
-    parentGroupId,
-    order: nextOrder,
-  });
-
-  // Assign rows to this group
-  if (rowIds.length > 0) {
-    await SpreadsheetRow.updateMany(
-      { _id: { $in: rowIds }, sheetId },
-      { $set: { groupId: group._id } },
-    );
-  }
-
-  const groupData = group.toObject();
-
-  emitSheetEvent(sheetId, "sheet:group:created", {
-    sheetId,
-    group: groupData,
-    userId,
-  });
-
-  res.status(201).json({
-    status: "success",
-    data: { group: groupData },
-  });
-});
-
-// PUT /sheets/:sheetId/groups/:groupId — Update group
-exports.updateGroup = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId, groupId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const group = await SpreadsheetRowGroup.findOne({
-    _id: groupId,
-    sheetId,
-  });
-  if (!group) return next(new AppError("Grup tidak ditemukan", 404));
-
-  const { name, isCollapsed } = req.body;
-
-  if (name !== undefined) {
-    if (!name.trim()) {
-      return next(new AppError("Nama grup tidak boleh kosong", 400));
-    }
-    group.name = name.trim();
-  }
-
-  if (isCollapsed !== undefined) {
-    group.isCollapsed = isCollapsed;
-  }
-
-  await group.save();
-
-  const groupData = group.toObject();
-
-  emitSheetEvent(sheetId, "sheet:group:updated", {
-    sheetId,
-    group: groupData,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: { group: groupData },
-  });
-});
-
-// DELETE /sheets/:sheetId/groups/:groupId — Hapus group
-exports.deleteGroup = catchAsync(async (req, res, next) => {
-  const { eventId, sheetId, groupId } = req.params;
-  const workspace = req.workspace;
-  const userId = req.user.id;
-
-  const event = await verifyEvent(eventId, workspace._id);
-  if (!event) return next(new AppError("Event tidak ditemukan", 404));
-
-  const group = await SpreadsheetRowGroup.findOne({
-    _id: groupId,
-    sheetId,
-  });
-  if (!group) return next(new AppError("Grup tidak ditemukan", 404));
-
-  // Ungroup all rows in this group
-  await SpreadsheetRow.updateMany(
-    { sheetId, groupId: group._id },
-    { $set: { groupId: null } },
-  );
-
-  // Remove child groups if any
-  await SpreadsheetRowGroup.deleteMany({
-    sheetId,
-    parentGroupId: group._id,
-  });
-
-  await group.deleteOne();
-
-  emitSheetEvent(sheetId, "sheet:group:deleted", {
-    sheetId,
-    groupId,
-    userId,
-  });
-
-  res.status(200).json({
-    status: "success",
-    message: "Grup berhasil dihapus",
+    message: "Ops applied",
   });
 });
 
@@ -1148,10 +168,18 @@ exports.exportCSV = catchAsync(async (req, res, next) => {
   const event = await verifyEvent(eventId, workspace._id);
   if (!event) return next(new AppError("Event tidak ditemukan", 404));
 
-  // Prefer workbook v2 storage if exists
-  const workbook = await SpreadsheetWorkbook.findOne({ eventId }).lean();
-  const sheet =
-    workbook?.data?.find((s) => String(s.id) === String(sheetId)) || null;
+  // Look up from per-sheet docs first
+  let sheet = await SpreadsheetSheetData.findOne({
+    eventId,
+    id: sheetId,
+  }).lean();
+
+  // Fallback: try legacy workbook blob
+  if (!sheet) {
+    const workbook = await SpreadsheetWorkbook.findOne({ eventId }).lean();
+    sheet =
+      workbook?.data?.find((s) => String(s.id) === String(sheetId)) || null;
+  }
 
   if (!sheet) {
     return next(new AppError("Sheet tidak ditemukan", 404));
@@ -1172,9 +200,9 @@ exports.exportCSV = catchAsync(async (req, res, next) => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(sheet.name)}.csv"`,
+    `attachment; filename="${encodeURIComponent(sheet.name || "sheet")}.csv"`,
   );
-  res.status(200).send("\uFEFF" + csv); // BOM for Excel compatibility
+  res.status(200).send("\uFEFF" + csv);
 });
 
 // GET /sheets/export/xlsx — Export all sheets to Excel
@@ -1190,15 +218,25 @@ exports.exportXLSX = catchAsync(async (req, res, next) => {
     ExcelJS = require("exceljs");
   } catch {
     return next(
-      new AppError("Export Excel tidak tersedia (exceljs belum terinstall)", 500),
+      new AppError(
+        "Export Excel tidak tersedia (exceljs belum terinstall)",
+        500,
+      ),
     );
   }
 
-  // Prefer workbook v2 storage if exists
-  const workbookDoc = await SpreadsheetWorkbook.findOne({ eventId }).lean();
-  const sheets = Array.isArray(workbookDoc?.data)
-    ? [...workbookDoc.data].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    : [];
+  // Get sheets from per-sheet docs
+  let sheets = await SpreadsheetSheetData.find({ eventId })
+    .sort({ order: 1 })
+    .lean();
+
+  // Fallback: legacy workbook blob
+  if (sheets.length === 0) {
+    const workbookDoc = await SpreadsheetWorkbook.findOne({ eventId }).lean();
+    sheets = Array.isArray(workbookDoc?.data)
+      ? [...workbookDoc.data].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      : [];
+  }
 
   if (sheets.length === 0) {
     return next(new AppError("Tidak ada sheet untuk diexport", 404));
@@ -1212,10 +250,8 @@ exports.exportXLSX = catchAsync(async (req, res, next) => {
     const worksheet = workbook.addWorksheet(sheet.name || "Sheet");
     const matrix = sheetToMatrix(sheet);
 
-    // Write rows
     matrix.forEach((row) => worksheet.addRow(row));
 
-    // Basic header styling (first row)
     const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true };
     headerRow.fill = {
@@ -1238,9 +274,9 @@ exports.exportXLSX = catchAsync(async (req, res, next) => {
   res.end();
 });
 
-// ── Helpers for workbook-based exports ─────────────────────────
+// ── Helpers ─────────────────────────────────────────
+
 function sheetToMatrix(sheet) {
-  // If FortuneSheet `data` matrix exists, prefer it.
   if (Array.isArray(sheet.data)) {
     return sheet.data.map((row) =>
       Array.isArray(row) ? row.map(extractCellValue) : [],
@@ -1256,8 +292,16 @@ function sheetToMatrix(sheet) {
     if (typeof c?.c === "number") maxC = Math.max(maxC, c.c);
   }
 
-  const rowCount = Math.max(typeof sheet.row === "number" ? sheet.row : 0, maxR + 1, 1);
-  const colCount = Math.max(typeof sheet.column === "number" ? sheet.column : 0, maxC + 1, 1);
+  const rowCount = Math.max(
+    typeof sheet.row === "number" ? sheet.row : 0,
+    maxR + 1,
+    1,
+  );
+  const colCount = Math.max(
+    typeof sheet.column === "number" ? sheet.column : 0,
+    maxC + 1,
+    1,
+  );
 
   const matrix = Array.from({ length: rowCount }, () =>
     Array.from({ length: colCount }, () => ""),
@@ -1270,8 +314,11 @@ function sheetToMatrix(sheet) {
     matrix[cell.r][cell.c] = extractCellValue(cell.v);
   }
 
-  // Trim trailing completely empty rows for nicer exports (keep at least 1)
-  while (matrix.length > 1 && matrix[matrix.length - 1].every((v) => v === "")) {
+  // Trim trailing empty rows
+  while (
+    matrix.length > 1 &&
+    matrix[matrix.length - 1].every((v) => v === "")
+  ) {
     matrix.pop();
   }
 
@@ -1285,4 +332,3 @@ function extractCellValue(v) {
   if (v.m !== undefined && v.m !== null) return v.m;
   return "";
 }
-

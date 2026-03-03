@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  lazy,
+  Suspense,
+} from "react";
 import { format } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -43,9 +49,29 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+// Lazy-load BlockNote to avoid SSR issues
+const BlockNoteEditor = lazy(() =>
+  import("@/components/blocknote-editor").then((m) => ({
+    default: m.BlockNoteEditor,
+  })),
+);
+const BlockNoteReadOnly = lazy(() =>
+  import("@/components/blocknote-editor").then((m) => ({
+    default: m.BlockNoteReadOnly,
+  })),
+);
+
 const EVENT_COLORS = [
-  "#8B5CF6", "#3B82F6", "#06B6D4", "#10B981", "#F59E0B",
-  "#EF4444", "#EC4899", "#F97316", "#14B8A6", "#6366F1",
+  "#8B5CF6",
+  "#3B82F6",
+  "#06B6D4",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#EC4899",
+  "#F97316",
+  "#14B8A6",
+  "#6366F1",
 ];
 
 const STATUS_CONFIG = {
@@ -80,6 +106,7 @@ export function EventOverviewTab({
   const [saving, setSaving] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [showParticipantAdd, setShowParticipantAdd] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
   const titleRef = useRef(null);
 
   // Sync title/desc with event prop
@@ -144,8 +171,12 @@ export function EventOverviewTab({
   const availableMembers = members.filter(
     (m) =>
       !participantIds.includes(m.userId?._id) &&
-      (m.userId?.name?.toLowerCase().includes(participantSearch.toLowerCase()) ||
-        m.userId?.email?.toLowerCase().includes(participantSearch.toLowerCase())),
+      (m.userId?.name
+        ?.toLowerCase()
+        .includes(participantSearch.toLowerCase()) ||
+        m.userId?.email
+          ?.toLowerCase()
+          .includes(participantSearch.toLowerCase())),
   );
 
   return (
@@ -194,17 +225,28 @@ export function EventOverviewTab({
             </label>
             {editingDesc ? (
               <div className="space-y-2">
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  className="resize-none"
-                  placeholder="Tulis deskripsi event..."
-                  autoFocus
-                />
+                <div className="py-2 px-6 rounded-md border border-input">
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-6 text-muted-foreground">
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      </div>
+                    }
+                  >
+                    <BlockNoteEditor
+                      key={editorKey}
+                      initialContent={event.description || null}
+                      onChange={setDescription}
+                      placeholder="Tulis deskripsi event..."
+                      className="blocknote-compact"
+                    />
+                  </Suspense>
+                </div>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleDescSave} disabled={saving}>
-                    {saving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                    {saving && (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    )}
                     Simpan
                   </Button>
                   <Button
@@ -222,12 +264,21 @@ export function EventOverviewTab({
             ) : (
               <div
                 className="cursor-pointer rounded-md px-2 py-2 -mx-2 hover:bg-accent/50 transition-colors min-h-[60px] group"
-                onClick={() => setEditingDesc(true)}
+                onClick={() => {
+                  setEditorKey((k) => k + 1);
+                  setEditingDesc(true);
+                }}
               >
                 {event.description ? (
-                  <p className="text-sm text-foreground whitespace-pre-wrap">
-                    {event.description}
-                  </p>
+                  <Suspense
+                    fallback={
+                      <p className="text-sm text-muted-foreground">
+                        Loading...
+                      </p>
+                    }
+                  >
+                    <BlockNoteReadOnly content={event.description} />
+                  </Suspense>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">
                     Klik untuk menambahkan deskripsi...
@@ -301,9 +352,7 @@ export function EventOverviewTab({
                     onSelect={(date) => {
                       if (date) saveField("endDate", date.toISOString());
                     }}
-                    disabled={(date) =>
-                      date < new Date(event.startDate)
-                    }
+                    disabled={(date) => date < new Date(event.startDate)}
                   />
                 </PopoverContent>
               </Popover>
@@ -483,4 +532,3 @@ export function EventOverviewTab({
     </div>
   );
 }
-

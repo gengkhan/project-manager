@@ -171,6 +171,7 @@ export function QuickCreateModal({
               <AlignLeft className="h-3 w-3" />
               Deskripsi
             </Label>
+            <div className="py-2 px-6 rounded-md border border-input">
               {open && (
                 <Suspense
                   fallback={
@@ -188,6 +189,7 @@ export function QuickCreateModal({
                   />
                 </Suspense>
               )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

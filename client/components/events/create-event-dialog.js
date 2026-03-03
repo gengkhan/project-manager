@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { format } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 import {
@@ -14,7 +14,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
+// Lazy-load BlockNote to avoid SSR issues and reduce initial bundle
+const BlockNoteEditor = lazy(() =>
+  import("@/components/blocknote-editor").then((m) => ({
+    default: m.BlockNoteEditor,
+  })),
+);
 import {
   Popover,
   PopoverContent,
@@ -37,6 +43,7 @@ import {
   Palette,
   Users,
   Check,
+  AlignLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,9 +60,15 @@ const EVENT_COLORS = [
   "#6366F1", // indigo
 ];
 
-export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }) {
+export function CreateEventDialog({
+  open,
+  onOpenChange,
+  onCreate,
+  members = [],
+}) {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [editorKey, setEditorKey] = useState(0);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -80,6 +93,7 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
       setSelectedParticipants([]);
       setParticipantSearch("");
       setErrors({});
+      setEditorKey((k) => k + 1);
     }
   }, [open]);
 
@@ -87,8 +101,12 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
   const filteredMembers = members.filter(
     (m) =>
       !selectedParticipants.some((sp) => sp._id === m.userId?._id) &&
-      (m.userId?.name?.toLowerCase().includes(participantSearch.toLowerCase()) ||
-        m.userId?.email?.toLowerCase().includes(participantSearch.toLowerCase())),
+      (m.userId?.name
+        ?.toLowerCase()
+        .includes(participantSearch.toLowerCase()) ||
+        m.userId?.email
+          ?.toLowerCase()
+          .includes(participantSearch.toLowerCase())),
   );
 
   const validate = () => {
@@ -120,7 +138,9 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
       });
       onOpenChange(false);
     } catch (err) {
-      setErrors({ submit: err.response?.data?.message || "Gagal membuat event" });
+      setErrors({
+        submit: err.response?.data?.message || "Gagal membuat event",
+      });
     } finally {
       setLoading(false);
     }
@@ -140,7 +160,7 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[780px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <div
@@ -174,17 +194,31 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
             )}
           </div>
 
-          {/* Description */}
+          {/* Description — BlockNote WYSIWYG */}
           <div className="space-y-2">
-            <Label htmlFor="event-desc">Deskripsi</Label>
-            <Textarea
-              id="event-desc"
-              placeholder="Jelaskan tentang event ini..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="resize-none"
-            />
+            <Label className="flex items-center gap-1.5">
+              <AlignLeft className="h-3 w-3" />
+              Deskripsi
+            </Label>
+            <div className="py-2 px-6 rounded-md border border-input">
+              {open && (
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center py-6 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  }
+                >
+                  <BlockNoteEditor
+                    key={editorKey}
+                    initialContent={null}
+                    onChange={setDescription}
+                    placeholder="Jelaskan tentang event ini..."
+                    className="blocknote-compact"
+                  />
+                </Suspense>
+              )}
+            </div>
           </div>
 
           {/* Dates Row */}
@@ -288,7 +322,9 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
                     )}
                     style={{ backgroundColor: c }}
                   >
-                    {color === c && <Check className="h-3.5 w-3.5 text-white" />}
+                    {color === c && (
+                      <Check className="h-3.5 w-3.5 text-white" />
+                    )}
                   </button>
                 ))}
               </div>
@@ -346,7 +382,9 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
                         {p.name?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-xs max-w-[100px] truncate">{p.name}</span>
+                    <span className="text-xs max-w-[100px] truncate">
+                      {p.name}
+                    </span>
                     <button
                       type="button"
                       onClick={() =>
@@ -387,7 +425,9 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate text-sm">{m.userId?.name}</p>
+                      <p className="font-medium truncate text-sm">
+                        {m.userId?.name}
+                      </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {m.userId?.email}
                       </p>
@@ -432,4 +472,3 @@ export function CreateEventDialog({ open, onOpenChange, onCreate, members = [] }
     </Dialog>
   );
 }
-

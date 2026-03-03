@@ -33,7 +33,7 @@ function KanbanColumnInner({
           onLoadMore?.(column._id);
         }
       },
-      { rootMargin: "100px" }
+      { rootMargin: "100px" },
     );
 
     observer.observe(sentinel);
@@ -41,9 +41,9 @@ function KanbanColumnInner({
   }, [hasMore, columnLoading, column._id, onLoadMore]);
 
   return (
-    <div className="flex flex-col min-w-[300px] max-w-[340px] w-[300px] shrink-0 h-full">
+    <div className="flex flex-col min-w-[300px] max-w-[340px] w-[300px] shrink-0 h-full border shadow-sm rounded-md">
       {/* Column header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 mb-2">
+      <div className="flex items-center gap-2 px-3 py-2.5 mb-2 border-b border-dashed">
         <span
           className="h-3 w-3 rounded-full shrink-0 shadow-sm"
           style={{ backgroundColor: column.color }}
@@ -72,7 +72,7 @@ function KanbanColumnInner({
             {...provided.droppableProps}
             className={cn(
               "flex-1 rounded-xl border border-dashed border-transparent p-1.5 transition-colors min-h-[120px] overflow-y-auto max-h-[calc(100vh-260px)] scrollbar-thin",
-              snapshot.isDraggingOver && "border-primary/30 bg-primary/5"
+              snapshot.isDraggingOver && "border-primary/30 bg-primary/5",
             )}
           >
             <div className="space-y-2">

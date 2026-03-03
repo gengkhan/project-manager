@@ -1,36 +1,42 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 
 /**
- * useSpreadsheet (workbook-based)
+ * useSpreadsheet (op-based collaboration)
  *
- * Stores FortuneSheet's native workbook `data` structure in backend:
- * GET/PUT /sheets/workbook
- *
- * Ref sheet structure: https://ruilisi.github.io/fortune-sheet-docs/guide/sheet.html
+ * Follows the fortune-sheet collaboration pattern:
+ * - GET /workbook to fetch initial data
+ * - onOp callback sends ops via Socket.io
+ * - Socket receives ops from others and applies via workbookRef.applyOp()
+ * - Presence (cursor positions) broadcast via socket
  */
 export function useSpreadsheet(workspaceId, eventId) {
-  const [workbookData, setWorkbookData] = useState(null); // SheetType[]
-  const [version, setVersion] = useState(null);
+  const [data, setData] = useState(null); // Sheet[]
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const basePath = `/workspaces/${workspaceId}/events/${eventId}/sheets`;
+  const workbookRef = useRef(null);
+  const joinedRef = useRef(false);
 
-  const joinedWorkbookRef = useRef(false);
+  // Stable user identity for presence
+  const { username, userId } = useMemo(() => {
+    const _userId = crypto.randomUUID();
+    return { username: `User-${_userId.slice(0, 3)}`, userId: _userId };
+  }, []);
 
+  // ── Fetch initial workbook data ──────────────────
   const fetchWorkbook = useCallback(async () => {
     if (!workspaceId || !eventId) return;
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.get(`${basePath}/workbook`);
-      const wb = data.data.workbook;
-      setWorkbookData(wb.data);
-      setVersion(wb.version);
+      const { data: res } = await api.get(`${basePath}/workbook`);
+      const wb = res.data.workbook;
+      setData(wb.data);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load workbook");
       console.error("Failed to fetch workbook:", err);
@@ -39,63 +45,83 @@ export function useSpreadsheet(workspaceId, eventId) {
     }
   }, [workspaceId, eventId, basePath]);
 
-  const saveWorkbook = useCallback(
-    async (nextData) => {
-      if (!workspaceId || !eventId) return;
-      const { data } = await api.put(`${basePath}/workbook`, {
-        data: nextData,
-        version,
-      });
-      const wb = data.data.workbook;
-      setVersion(wb.version);
-      return wb;
-    },
-    [workspaceId, eventId, basePath, version],
-  );
-
   // Load once
   useEffect(() => {
     fetchWorkbook();
   }, [fetchWorkbook]);
 
-  // Socket: join workbook room + listen to updates
+  // ── onOp: send ops to server via socket ──────────
+  const onOp = useCallback(
+    (ops) => {
+      const socket = getSocket();
+      if (!socket || !eventId) return;
+      socket.emit("workbook:op", { eventId, ops });
+    },
+    [eventId],
+  );
+
+  // ── onChange: keep local data in sync ─────────────
+  const onChange = useCallback((d) => {
+    setData(d);
+  }, []);
+
+  // ── Socket: join room + handle ops & presence ────
   useEffect(() => {
     const socket = getSocket();
     if (!socket || !eventId) return;
 
-    if (!joinedWorkbookRef.current) {
+    if (!joinedRef.current) {
       socket.emit("workbook:join", eventId);
-      joinedWorkbookRef.current = true;
+      joinedRef.current = true;
     }
 
-    const handleUpdated = ({ eventId: evt, data: wbData, version: v }) => {
+    // Receive ops from other users
+    const handleOp = ({ eventId: evt, ops }) => {
       if (String(evt) !== String(eventId)) return;
-      setWorkbookData(wbData);
-      setVersion(v);
+      workbookRef.current?.applyOp(ops);
     };
 
-    socket.on("workbook:updated", handleUpdated);
+    // Receive presence updates
+    const handleAddPresences = (presences) => {
+      workbookRef.current?.addPresences(presences);
+    };
+
+    const handleRemovePresences = (presences) => {
+      workbookRef.current?.removePresences(presences);
+    };
+
+    const handleOpError = (err) => {
+      console.error("workbook:op:error", err);
+    };
+
+    socket.on("workbook:op", handleOp);
+    socket.on("workbook:addPresences", handleAddPresences);
+    socket.on("workbook:removePresences", handleRemovePresences);
+    socket.on("workbook:op:error", handleOpError);
 
     return () => {
-      socket.off("workbook:updated", handleUpdated);
+      socket.off("workbook:op", handleOp);
+      socket.off("workbook:addPresences", handleAddPresences);
+      socket.off("workbook:removePresences", handleRemovePresences);
+      socket.off("workbook:op:error", handleOpError);
       socket.emit("workbook:leave", eventId);
-      joinedWorkbookRef.current = false;
+      joinedRef.current = false;
     };
   }, [eventId]);
 
-  // Export (still uses existing export endpoints; server now exports from workbook)
+  // ── Export ────────────────────────────────────────
   const exportCSV = useCallback(
     async (sheetId) => {
       const response = await api.get(`${basePath}/${sheetId}/export/csv`, {
         responseType: "blob",
       });
-      const sheet = Array.isArray(workbookData)
-        ? workbookData.find((s) => String(s.id) === String(sheetId))
+      const sheet = Array.isArray(data)
+        ? data.find((s) => String(s.id) === String(sheetId))
         : null;
       const fileName = `${sheet?.name || "sheet"}.csv`;
       downloadBlob(response.data, fileName, "text/csv");
     },
-    [basePath, workbookData],
+    [basePath, data],
   );
 
   const exportXLSX = useCallback(async () => {
@@ -110,15 +136,19 @@ export function useSpreadsheet(workspaceId, eventId) {
   }, [basePath]);
 
   return {
-    workbookData,
-    setWorkbookData,
-    version,
+    data,
+    setData,
     loading,
     error,
     fetchWorkbook,
-    saveWorkbook,
+    onOp,
+    onChange,
+    workbookRef,
     exportCSV,
     exportXLSX,
+    // Presence helpers
+    username,
+    userId,
   };
 }
 

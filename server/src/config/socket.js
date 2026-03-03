@@ -134,9 +134,7 @@ const initializeSocket = (httpServer) => {
     socket.on("workspace:join", (workspaceId) => {
       socket.join(`workspace:${workspaceId}`);
       addUserToWorkspace(userId, workspaceId);
-      logger.debug(
-        `Socket ${socket.id} joined workspace:${workspaceId}`,
-      );
+      logger.debug(`Socket ${socket.id} joined workspace:${workspaceId}`);
     });
 
     socket.on("workspace:leave", (workspaceId) => {
@@ -154,7 +152,7 @@ const initializeSocket = (httpServer) => {
       socket.leave(`board:${boardId}`);
     });
 
-    // ── Join sheet room (spreadsheet) ──────────────
+    // ── Join sheet room (spreadsheet — legacy) ──────
     socket.on("sheet:join", (sheetId) => {
       socket.join(`sheet:${sheetId}`);
     });
@@ -163,13 +161,60 @@ const initializeSocket = (httpServer) => {
       socket.leave(`sheet:${sheetId}`);
     });
 
-    // ── Join workbook room (spreadsheet v2) ─────────
+    // ── Join workbook room (spreadsheet collaboration) ──
     socket.on("workbook:join", (eventId) => {
       socket.join(`workbook:${eventId}`);
+      socket.workbookEventId = eventId;
+      logger.debug(`Socket ${socket.id} joined workbook:${eventId}`);
     });
 
     socket.on("workbook:leave", (eventId) => {
       socket.leave(`workbook:${eventId}`);
+      // Broadcast removePresences to others when leaving
+      if (socket.workbookPresences) {
+        socket
+          .to(`workbook:${eventId}`)
+          .emit("workbook:removePresences", socket.workbookPresences);
+        socket.workbookPresences = null;
+      }
+      socket.workbookEventId = null;
+    });
+
+    // ── Workbook: forward ops to other collaborators ──
+    socket.on("workbook:op", async (msg) => {
+      const eventId = socket.workbookEventId || msg.eventId;
+      if (!eventId || !Array.isArray(msg.ops)) return;
+      try {
+        // Persist ops in MongoDB
+        const SpreadsheetSheetData = require("../models/SpreadsheetSheetData");
+        const { applyOp } = require("../utils/applyOp");
+        await applyOp(SpreadsheetSheetData, eventId, msg.ops);
+        // Broadcast to other users in the room
+        socket.to(`workbook:${eventId}`).emit("workbook:op", {
+          eventId,
+          ops: msg.ops,
+          userId,
+        });
+      } catch (err) {
+        logger.error(`workbook:op error: ${err.message}`);
+        socket.emit("workbook:op:error", {
+          message: err.message,
+        });
+      }
+    });
+
+    // ── Workbook: cursor / selection presence ──
+    socket.on("workbook:addPresences", (data) => {
+      const eventId = socket.workbookEventId;
+      if (!eventId) return;
+      socket.workbookPresences = data;
+      socket.to(`workbook:${eventId}`).emit("workbook:addPresences", data);
+    });
+
+    socket.on("workbook:removePresences", (data) => {
+      const eventId = socket.workbookEventId;
+      if (!eventId) return;
+      socket.to(`workbook:${eventId}`).emit("workbook:removePresences", data);
     });
 
     // ── Presence heartbeat ─────────────────────────
@@ -189,6 +234,12 @@ const initializeSocket = (httpServer) => {
     // ── Disconnect ─────────────────────────────────
     socket.on("disconnect", (reason) => {
       logger.debug(`Socket disconnected: ${socket.id} (${reason})`);
+      // Broadcast removePresences for workbook collaboration
+      if (socket.workbookEventId && socket.workbookPresences) {
+        socket
+          .to(`workbook:${socket.workbookEventId}`)
+          .emit("workbook:removePresences", socket.workbookPresences);
+      }
       handleSocketDisconnect(userId, socket.id);
     });
   });

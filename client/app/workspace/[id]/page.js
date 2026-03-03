@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   AlertCircle,
   TrendingUp,
+  History,
 } from "lucide-react";
 
 const ROLE_LABELS = {
@@ -60,9 +61,7 @@ function StatCard({ icon: Icon, label, value, color, href, workspaceId }) {
   );
 
   if (href) {
-    return (
-      <Link href={`/workspace/${workspaceId}${href}`}>{content}</Link>
-    );
+    return <Link href={`/workspace/${workspaceId}${href}`}>{content}</Link>;
   }
   return content;
 }
@@ -89,7 +88,7 @@ export default function WorkspaceDashboardPage({ params }) {
   const { currentWorkspace } = useWorkspace();
   const { user } = useAuth();
 
-  if (!currentWorkspace) return null;
+  if (!currentWorkspace) return <></>;
 
   const greeting = () => {
     const hour = new Date().getHours();
@@ -294,4 +293,3 @@ export default function WorkspaceDashboardPage({ params }) {
     </div>
   );
 }
-

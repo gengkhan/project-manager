@@ -3,6 +3,30 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import "@fortune-sheet/react/dist/index.css";
+
+// Presence colors palette (from fortune-sheet core/modules/color.ts — not exported in dist)
+const PRESENCE_COLORS = [
+  "#c1232b",
+  "#27727b",
+  "#fcce10",
+  "#e87c25",
+  "#b5c334",
+  "#fe8463",
+  "#9bca63",
+  "#fad860",
+  "#f3a43b",
+  "#60c0dd",
+  "#d7504b",
+  "#c6e579",
+  "#f4e001",
+  "#f0805a",
+  "#26c0c0",
+  "#c12e34",
+  "#e6b600",
+  "#0098d9",
+  "#2b821d",
+  "#005eaa",
+];
 import { useSpreadsheet } from "@/hooks/use-spreadsheet";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -31,89 +55,112 @@ const Workbook = dynamic(
   { ssr: false, loading: () => <SpreadsheetSkeleton /> },
 );
 
+// Simple hash for consistent presence colors
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return hash;
+}
+
 // ════════════════════════════════════════════════
 // Main Component
 // ════════════════════════════════════════════════
 
 export function EventSpreadsheetTab({ event, workspaceId }) {
   const {
-    workbookData,
-    setWorkbookData,
-    version,
+    data,
+    setData,
     loading,
     error,
     fetchWorkbook,
-    saveWorkbook,
+    onOp,
+    onChange,
+    workbookRef,
     exportCSV,
     exportXLSX,
+    username,
+    userId,
   } = useSpreadsheet(workspaceId, event._id);
 
   const { currentWorkspace } = useWorkspace();
   const isReadOnly = currentWorkspace?.role === "guest";
 
-  const workbookRef = useRef(null);
   const [exporting, setExporting] = useState(false);
-
-  // Track the currently active sheet for export
   const [activeFortuneSheetId, setActiveFortuneSheetId] = useState(null);
 
-  // Debounce timer for saving full workbook (native FortuneSheet structure)
-  const saveTimeoutRef = useRef(null);
-  const lastSavedDataRef = useRef(null);
+  // Track last selection to avoid spamming presence updates
+  const lastSelection = useRef(null);
+  const sheetContainerRef = useRef(null);
 
-  // ── Handle onChange: keep workbook controlled + debounced PUT ──
-  const handleChange = useCallback(
-    async (newData) => {
-      if (isReadOnly || !Array.isArray(newData)) return;
+  // ── Trap wheel events so Shift+Scroll horizontal scrolling works ──
+  useEffect(() => {
+    const el = sheetContainerRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      // Stop the event from reaching parent scrollable containers
+      // so FortuneSheet can handle horizontal scroll (shift+wheel) natively
+      e.stopPropagation();
+    };
+    // Must use passive: false so we can stopPropagation on non-passive wheel
+    el.addEventListener("wheel", handler, { passive: true });
+    return () => el.removeEventListener("wheel", handler);
+  }, [data]); // re-attach when data loads
 
-      // Control the Workbook so it never snaps back on rerender
-      setWorkbookData(newData);
+  // ── afterSelectionChange: broadcast cursor presence ──
+  const afterSelectionChange = useCallback(
+    (sheetId, selection) => {
+      const { getSocket } = require("@/lib/socket");
+      const socket = getSocket();
+      if (!socket) return;
 
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          // Avoid saving if nothing actually changed since last save
-          const serialized = JSON.stringify(newData);
-          if (lastSavedDataRef.current === serialized) {
-            return;
-          }
+      const s = {
+        r: selection.row[0],
+        c: selection.column[0],
+      };
 
-          await saveWorkbook(newData);
-          lastSavedDataRef.current = serialized;
-        } catch (err) {
-          console.error("Failed to save workbook:", err);
-          toast.error("Failed to save changes");
-        }
-      }, 200);
+      // Deduplicate
+      if (
+        lastSelection.current?.r === s.r &&
+        lastSelection.current?.c === s.c
+      ) {
+        return;
+      }
+      lastSelection.current = s;
+
+      socket.emit("workbook:addPresences", [
+        {
+          sheetId,
+          username,
+          userId,
+          color:
+            PRESENCE_COLORS[
+              Math.abs(hashCode(userId)) % PRESENCE_COLORS.length
+            ],
+          selection: s,
+        },
+      ]);
     },
-    [isReadOnly, setWorkbookData, saveWorkbook],
+    [userId, username],
   );
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // ── FortuneSheet hooks — handle sheet lifecycle events ──
+  // ── FortuneSheet hooks ──
   const fortuneHooks = useMemo(
     () => ({
-      // Track active sheet for export
       afterActivateSheet: (id) => {
         setActiveFortuneSheetId(String(id));
       },
+      afterSelectionChange,
     }),
-    [],
+    [afterSelectionChange],
   );
 
   // ── Export ──
   const handleExportCSV = async () => {
-    // Find the active sheet's backend ID
-    const backendId = activeFortuneSheetId || workbookData?.[0]?.id;
-
+    const backendId = activeFortuneSheetId || data?.[0]?.id;
     if (!backendId) return;
 
     setExporting(true);
@@ -213,12 +260,17 @@ export function EventSpreadsheetTab({ event, workspaceId }) {
       </div>
 
       {/* ── FortuneSheet ─────────────────────────────── */}
-      <div className="relative" style={{ height: "650px", width: "100%" }}>
-        {workbookData ? (
+      <div
+        ref={sheetContainerRef}
+        className="relative"
+        style={{ height: "650px", width: "100%" }}
+      >
+        {data ? (
           <Workbook
             ref={workbookRef}
-            data={workbookData}
-            onChange={handleChange}
+            data={data}
+            onChange={onChange}
+            onOp={onOp}
             showToolbar={!isReadOnly}
             showFormulaBar={!isReadOnly}
             showSheetTabs={true}
