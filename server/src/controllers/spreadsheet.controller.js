@@ -5,6 +5,7 @@ const Event = require("../models/Event");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
 const { applyOp } = require("../utils/applyOp");
+const ActivityLogService = require("../services/activityLog.service");
 
 // Helper: get Socket.io instance (safe)
 const getIO = () => {
@@ -27,6 +28,59 @@ const emitWorkbookEvent = (eventId, event, data) => {
 const verifyEvent = async (eventId, workspaceId) => {
   const event = await Event.findOne({ _id: eventId, workspaceId });
   return event;
+};
+
+// Helper: Log meaningful spreadsheet ops (skip noisy cell edits)
+const logSpreadsheetOps = (ops, workspaceId, userId, event) => {
+  for (const op of ops) {
+    const t = op.t;
+    // Sheet management ops
+    if (t === "sha") {
+      ActivityLogService.log({
+        workspaceId,
+        actorId: userId,
+        action: "spreadsheet.sheet_created",
+        targetType: "spreadsheet",
+        targetId: event._id,
+        targetName: event.title,
+        details: {
+          contextType: "event",
+          contextId: event._id,
+          contextName: event.title,
+        },
+      });
+    } else if (t === "shd") {
+      ActivityLogService.log({
+        workspaceId,
+        actorId: userId,
+        action: "spreadsheet.sheet_deleted",
+        targetType: "spreadsheet",
+        targetId: event._id,
+        targetName: event.title,
+        details: {
+          contextType: "event",
+          contextId: event._id,
+          contextName: event.title,
+        },
+      });
+    } else if (t === "shr") {
+      ActivityLogService.log({
+        workspaceId,
+        actorId: userId,
+        action: "spreadsheet.sheet_renamed",
+        targetType: "spreadsheet",
+        targetId: event._id,
+        targetName: event.title,
+        details: {
+          newValue: op.v || "",
+          contextType: "event",
+          contextId: event._id,
+          contextName: event.title,
+        },
+      });
+    }
+    // Skip cell-level ops (v, cg, etc.) to avoid flooding the log
+  }
 };
 
 // ════════════════════════════════════════════════
@@ -149,6 +203,9 @@ exports.applyOps = catchAsync(async (req, res, next) => {
     ops,
     userId,
   });
+
+  // Activity log (only structural ops, not cell edits)
+  logSpreadsheetOps(ops, workspace._id, userId, event);
 
   res.status(200).json({
     status: "success",

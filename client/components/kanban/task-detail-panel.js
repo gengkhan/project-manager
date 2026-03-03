@@ -74,7 +74,7 @@ export function TaskDetailPanel({
       if (!task) return;
       await onUpdate?.(task._id, updates);
     },
-    [task, onUpdate]
+    [task, onUpdate],
   );
 
   const handleUploadAttachment = useCallback(
@@ -85,30 +85,30 @@ export function TaskDetailPanel({
       await api.post(
         `/workspaces/${workspaceId}/tasks/${task._id}/attachments`,
         formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
       // Refresh task data
       const { data } = await api.get(
-        `/workspaces/${workspaceId}/tasks/${task._id}`
+        `/workspaces/${workspaceId}/tasks/${task._id}`,
       );
       await onUpdate?.(task._id, { attachments: data.data.task.attachments });
     },
-    [task, workspaceId, onUpdate]
+    [task, workspaceId, onUpdate],
   );
 
   const handleDeleteAttachment = useCallback(
     async (attachmentId) => {
       if (!task) return;
       await api.delete(
-        `/workspaces/${workspaceId}/tasks/${task._id}/attachments/${attachmentId}`
+        `/workspaces/${workspaceId}/tasks/${task._id}/attachments/${attachmentId}`,
       );
       // Refresh task data
       const { data } = await api.get(
-        `/workspaces/${workspaceId}/tasks/${task._id}`
+        `/workspaces/${workspaceId}/tasks/${task._id}`,
       );
       await onUpdate?.(task._id, { attachments: data.data.task.attachments });
     },
-    [task, workspaceId, onUpdate]
+    [task, workspaceId, onUpdate],
   );
 
   if (!task) return null;
@@ -127,13 +127,19 @@ export function TaskDetailPanel({
           <div className="flex items-center justify-between px-4 py-3 border-b bg-card/50">
             <div className="flex items-center gap-2 min-w-0">
               <span
-                className={cn("h-2.5 w-2.5 rounded-full shrink-0", priority.color)}
+                className={cn(
+                  "h-2.5 w-2.5 rounded-full shrink-0",
+                  priority.color,
+                )}
               />
               <SheetTitle className="text-sm font-medium truncate">
                 {task.title}
               </SheetTitle>
               {task.isArchived && (
-                <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 shrink-0">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] border-amber-300 text-amber-600 shrink-0"
+                >
                   Arsip
                 </Badge>
               )}
@@ -243,7 +249,7 @@ export function TaskDetailPanel({
                   <TabComment />
                 </TabsContent>
                 <TabsContent value="activity" className="mt-0 outline-none">
-                  <TabActivity />
+                  <TabActivity workspaceId={workspaceId} taskId={task._id} />
                 </TabsContent>
               </div>
             </ScrollArea>
@@ -277,8 +283,8 @@ export function TaskDetailPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Task</AlertDialogTitle>
             <AlertDialogDescription>
-              Apakah kamu yakin ingin menghapus task "{task.title}"? Tindakan ini
-              tidak bisa dibatalkan.
+              Apakah kamu yakin ingin menghapus task "{task.title}"? Tindakan
+              ini tidak bisa dibatalkan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -299,4 +305,3 @@ export function TaskDetailPanel({
     </>
   );
 }
-

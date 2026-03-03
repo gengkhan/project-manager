@@ -8,6 +8,7 @@ import { useEvents } from "@/hooks/use-events";
 import { EventOverviewTab } from "@/components/events/event-overview-tab";
 import { EventTasksTab } from "@/components/events/event-tasks-tab";
 import { EventSpreadsheetTab } from "@/components/spreadsheet/event-spreadsheet-tab";
+import { EventActivityTab } from "@/components/activity/event-activity-tab";
 import { DeleteEventDialog } from "@/components/events/delete-event-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,6 @@ import {
   History,
   Loader2,
   FileText,
-  Construction,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -42,17 +42,20 @@ import { id as localeId } from "date-fns/locale";
 const STATUS_CONFIG = {
   upcoming: {
     label: "Upcoming",
-    className: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+    className:
+      "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
     dot: "bg-blue-500",
   },
   ongoing: {
     label: "Ongoing",
-    className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+    className:
+      "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
     dot: "bg-emerald-500",
   },
   completed: {
     label: "Completed",
-    className: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+    className:
+      "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700",
     dot: "bg-gray-400",
   },
 };
@@ -61,8 +64,13 @@ export default function EventDetailPage({ params }) {
   const { id, eventId } = use(params);
   const router = useRouter();
   const { currentWorkspace, members, fetchMembers } = useWorkspace();
-  const { getEvent, updateEvent, deleteEvent, addParticipant, removeParticipant } =
-    useEvents(id);
+  const {
+    getEvent,
+    updateEvent,
+    deleteEvent,
+    addParticipant,
+    removeParticipant,
+  } = useEvents(id);
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -199,7 +207,12 @@ export default function EventDetailPage({ params }) {
             variant="outline"
             className={cn("text-xs h-6", statusConfig.className)}
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5", statusConfig.dot)} />
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full mr-1.5",
+                statusConfig.dot,
+              )}
+            />
             {statusConfig.label}
           </Badge>
 
@@ -234,15 +247,17 @@ export default function EventDetailPage({ params }) {
             locale: localeId,
           })}
           {event.taskCount > 0 && (
-            <span className="ml-2">
-              · {event.taskCount} task terkait
-            </span>
+            <span className="ml-2">· {event.taskCount} task terkait</span>
           )}
         </p>
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
         <TabsList className="w-full grid grid-cols-4 h-10">
           <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm">
             <FileText className="h-3.5 w-3.5" />
@@ -257,7 +272,10 @@ export default function EventDetailPage({ params }) {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="spreadsheet" className="gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger
+            value="spreadsheet"
+            className="gap-1.5 text-xs sm:text-sm"
+          >
             <Table2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Spreadsheet</span>
           </TabsTrigger>
@@ -292,20 +310,11 @@ export default function EventDetailPage({ params }) {
           <EventSpreadsheetTab event={event} workspaceId={id} />
         </TabsContent>
 
-        {/* Tab: Activity — Placeholder */}
+        {/* Tab: Activity */}
         <TabsContent value="activity" className="mt-0">
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 mb-5">
-                <Construction className="h-8 w-8 text-blue-500/70" />
-              </div>
-              <h3 className="font-semibold text-foreground mb-1.5">
-                Activity Log - Coming Soon
-              </h3>
-              <p className="text-sm text-muted-foreground max-w-sm">
-                Fitur activity log sedang dalam pengembangan (Fase 3). Semua
-                perubahan pada event ini akan tercatat di sini.
-              </p>
+            <CardContent className="pt-6">
+              <EventActivityTab workspaceId={id} eventId={eventId} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -321,4 +330,3 @@ export default function EventDetailPage({ params }) {
     </div>
   );
 }
-

@@ -6,6 +6,7 @@ const User = require("../models/User");
 const emailService = require("../services/email.service");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
+const ActivityLogService = require("../services/activityLog.service");
 
 // ──────────────────────────────────────────────
 // GET /api/workspaces — Daftar workspace user
@@ -151,9 +152,7 @@ exports.updateWorkspace = catchAsync(async (req, res, next) => {
 
   if (kanbanColumns !== undefined) {
     if (!Array.isArray(kanbanColumns) || kanbanColumns.length === 0) {
-      return next(
-        new AppError("Harus ada minimal 1 kolom kanban", 400),
-      );
+      return next(new AppError("Harus ada minimal 1 kolom kanban", 400));
     }
     // Validasi dan reorder
     workspace.kanbanColumns = kanbanColumns.map((col, index) => ({
@@ -165,6 +164,16 @@ exports.updateWorkspace = catchAsync(async (req, res, next) => {
   }
 
   await workspace.save();
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: req.user.id,
+    action: "workspace.updated",
+    targetType: "workspace",
+    targetId: workspace._id,
+    targetName: workspace.name,
+  });
 
   res.status(200).json({
     status: "success",
@@ -197,6 +206,16 @@ exports.archiveWorkspace = catchAsync(async (req, res) => {
   workspace.isArchived = true;
   workspace.archivedAt = new Date();
   await workspace.save();
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: req.user.id,
+    action: "workspace.archived",
+    targetType: "workspace",
+    targetId: workspace._id,
+    targetName: workspace.name,
+  });
 
   res.status(200).json({
     status: "success",
@@ -259,7 +278,10 @@ exports.inviteMembers = catchAsync(async (req, res, next) => {
   const workspace = req.workspace;
   const inviterId = req.user.id;
 
-  if (!emails || (Array.isArray(emails) ? emails.length === 0 : !emails.trim())) {
+  if (
+    !emails ||
+    (Array.isArray(emails) ? emails.length === 0 : !emails.trim())
+  ) {
     return next(new AppError("Email harus diisi", 400));
   }
 
@@ -280,7 +302,9 @@ exports.inviteMembers = catchAsync(async (req, res, next) => {
   }
 
   // Validasi role (tidak boleh owner)
-  const validRole = ["admin", "member", "guest"].includes(role) ? role : "member";
+  const validRole = ["admin", "member", "guest"].includes(role)
+    ? role
+    : "member";
 
   // Ambil info inviter
   const inviter = await User.findById(inviterId).select("name");
@@ -338,6 +362,21 @@ exports.inviteMembers = catchAsync(async (req, res, next) => {
     }
   }
 
+  // Activity log for invitations
+  if (results.length > 0) {
+    for (const r of results) {
+      ActivityLogService.log({
+        workspaceId: workspace._id,
+        actorId: inviterId,
+        action: "workspace.member_invited",
+        targetType: "workspace",
+        targetId: workspace._id,
+        targetName: workspace.name,
+        details: { newValue: r.email },
+      });
+    }
+  }
+
   res.status(200).json({
     status: "success",
     data: {
@@ -374,7 +413,9 @@ exports.joinViaLink = catchAsync(async (req, res, next) => {
 
   const workspace = await Workspace.findOne({ inviteCode });
   if (!workspace) {
-    return next(new AppError("Tautan undangan tidak valid atau sudah expired", 404));
+    return next(
+      new AppError("Tautan undangan tidak valid atau sudah expired", 404),
+    );
   }
 
   // Cek apakah sudah member
@@ -396,6 +437,16 @@ exports.joinViaLink = catchAsync(async (req, res, next) => {
     userId,
     role: "member",
     joinedAt: new Date(),
+  });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "workspace.member_joined",
+    targetType: "workspace",
+    targetId: workspace._id,
+    targetName: workspace.name,
   });
 
   res.status(200).json({
@@ -489,12 +540,25 @@ exports.changeMemberRole = catchAsync(async (req, res, next) => {
   }
 
   // Tidak bisa ubah role sendiri
-  if (targetMembership.userId.toString() === actorMembership.userId.toString()) {
+  if (
+    targetMembership.userId.toString() === actorMembership.userId.toString()
+  ) {
     return next(new AppError("Tidak bisa mengubah role sendiri", 400));
   }
 
   targetMembership.role = newRole;
   await targetMembership.save();
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: req.workspace._id,
+    actorId: actorMembership.userId,
+    action: "workspace.role_changed",
+    targetType: "workspace",
+    targetId: req.workspace._id,
+    targetName: req.workspace.name,
+    details: { field: "role", newValue: newRole },
+  });
 
   res.status(200).json({
     status: "success",
@@ -510,7 +574,9 @@ exports.removeMember = catchAsync(async (req, res, next) => {
   const actorMembership = req.workspaceMember;
 
   // Tidak bisa keluarkan diri sendiri (pakai leave)
-  if (targetMembership.userId.toString() === actorMembership.userId.toString()) {
+  if (
+    targetMembership.userId.toString() === actorMembership.userId.toString()
+  ) {
     return next(
       new AppError("Gunakan fitur Leave untuk keluar dari workspace", 400),
     );
@@ -522,6 +588,16 @@ exports.removeMember = catchAsync(async (req, res, next) => {
   }
 
   await WorkspaceMember.deleteOne({ _id: targetMembership._id });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: req.workspace._id,
+    actorId: actorMembership.userId,
+    action: "workspace.member_removed",
+    targetType: "workspace",
+    targetId: req.workspace._id,
+    targetName: req.workspace.name,
+  });
 
   res.status(200).json({
     status: "success",
@@ -545,6 +621,16 @@ exports.leaveWorkspace = catchAsync(async (req, res, next) => {
   }
 
   await WorkspaceMember.deleteOne({ _id: membership._id });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: req.workspace._id,
+    actorId: req.user.id,
+    action: "workspace.member_left",
+    targetType: "workspace",
+    targetId: req.workspace._id,
+    targetName: req.workspace.name,
+  });
 
   res.status(200).json({
     status: "success",
@@ -711,7 +797,9 @@ exports.transferOwnership = catchAsync(async (req, res, next) => {
 
   // Tidak bisa transfer ke diri sendiri
   if (targetUserId === ownerMembership.userId.toString()) {
-    return next(new AppError("Tidak bisa transfer ownership ke diri sendiri", 400));
+    return next(
+      new AppError("Tidak bisa transfer ownership ke diri sendiri", 400),
+    );
   }
 
   // Cari target membership
@@ -743,9 +831,18 @@ exports.transferOwnership = catchAsync(async (req, res, next) => {
     workspace.save(),
   ]);
 
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: ownerMembership.userId,
+    action: "workspace.ownership_transferred",
+    targetType: "workspace",
+    targetId: workspace._id,
+    targetName: workspace.name,
+  });
+
   res.status(200).json({
     status: "success",
     message: "Ownership berhasil ditransfer",
   });
 });
-

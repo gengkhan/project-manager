@@ -1,21 +1,40 @@
 "use client";
 
-import { History } from "lucide-react";
+import { useEffect } from "react";
+import { useActivity } from "@/hooks/use-activity";
+import { ActivityTimeline } from "@/components/activity/activity-timeline";
 
-export function TabActivity() {
+/**
+ * Tab Activity di Detail Task
+ *
+ * @param {Object} props
+ * @param {string} props.workspaceId - ID workspace
+ * @param {string} props.taskId - ID task
+ */
+export function TabActivity({ workspaceId, taskId }) {
+  const { activities, loading, hasMore, fetchTaskActivities, loadMore } =
+    useActivity(workspaceId);
+
+  useEffect(() => {
+    if (workspaceId && taskId) {
+      fetchTaskActivities(taskId);
+    }
+  }, [workspaceId, taskId, fetchTaskActivities]);
+
+  const handleLoadMore = () => {
+    loadMore();
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-50 dark:bg-purple-900/20 mb-4">
-        <History className="h-8 w-8 text-purple-400" />
-      </div>
-      <h3 className="text-sm font-semibold text-foreground mb-1">
-        Activity Log
-      </h3>
-      <p className="text-xs text-muted-foreground max-w-[240px]">
-        Riwayat perubahan task akan tersedia di Fase 3 — Activity Log & Audit
-        Trail.
-      </p>
+    <div className="px-1 py-4">
+      <ActivityTimeline
+        activities={activities}
+        loading={loading}
+        hasMore={hasMore}
+        onLoadMore={handleLoadMore}
+        emptyMessage="Belum ada riwayat aktivitas untuk task ini"
+        compact
+      />
     </div>
   );
 }
-

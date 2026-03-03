@@ -63,6 +63,7 @@ app.use("/api/workspaces/:id/tasks", require("./routes/task.routes"));
 app.use("/api/workspaces/:id/labels", require("./routes/label.routes"));
 app.use("/api/workspaces/:id/calendar", require("./routes/calendar.routes"));
 app.use("/api/workspaces/:id/events", require("./routes/event.routes"));
+app.use("/api/workspaces/:id/activity", require("./routes/activity.routes"));
 // app.use('/api/notifications', require('./routes/notification.routes'));
 // app.use('/api/comments', require('./routes/comment.routes'));
 

@@ -9,6 +9,7 @@ const {
   isValidColumn,
   getNextColumnOrder,
 } = require("../services/task.service");
+const ActivityLogService = require("../services/activityLog.service");
 
 // Helper: get Socket.io instance (safe)
 const getIO = () => {
@@ -226,6 +227,16 @@ exports.createTask = catchAsync(async (req, res, next) => {
     userId,
   });
 
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "task.created",
+    targetType: "task",
+    targetId: task._id,
+    targetName: task.title,
+  });
+
   res.status(201).json({
     status: "success",
     data: { task: populatedTask },
@@ -423,6 +434,44 @@ exports.updateTask = catchAsync(async (req, res, next) => {
     }),
   });
 
+  // Activity log — determine what changed
+  if (columnChanged) {
+    const newColName =
+      workspace.kanbanColumns?.find(
+        (c) => c._id.toString() === columnId.toString(),
+      )?.name || columnId.toString();
+    ActivityLogService.log({
+      workspaceId: workspace._id,
+      actorId: userId,
+      action: "task.moved",
+      targetType: "task",
+      targetId: task._id,
+      targetName: task.title,
+      details: { field: "columnId", newValue: newColName },
+    });
+  } else {
+    // Generic update log
+    const changedFields = [];
+    if (title !== undefined) changedFields.push("title");
+    if (description !== undefined) changedFields.push("description");
+    if (priority !== undefined) changedFields.push("priority");
+    if (dueDate !== undefined) changedFields.push("dueDate");
+    if (assignees !== undefined) changedFields.push("assignees");
+    if (labels !== undefined) changedFields.push("labels");
+    if (subtasks !== undefined) changedFields.push("subtasks");
+    if (changedFields.length > 0) {
+      ActivityLogService.log({
+        workspaceId: workspace._id,
+        actorId: userId,
+        action: "task.updated",
+        targetType: "task",
+        targetId: task._id,
+        targetName: task.title,
+        details: { field: changedFields.join(", ") },
+      });
+    }
+  }
+
   res.status(200).json({
     status: "success",
     data: { task: populatedTask },
@@ -467,6 +516,16 @@ exports.deleteTask = catchAsync(async (req, res, next) => {
     userId,
   });
 
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "task.deleted",
+    targetType: "task",
+    targetId: task._id,
+    targetName: task.title,
+  });
+
   res.status(200).json({
     status: "success",
     message: "Task berhasil dihapus",
@@ -504,6 +563,16 @@ exports.archiveTask = catchAsync(async (req, res, next) => {
     userId,
   });
 
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "task.archived",
+    targetType: "task",
+    targetId: task._id,
+    targetName: task.title,
+  });
+
   res.status(200).json({
     status: "success",
     message: "Task berhasil diarsipkan",
@@ -539,6 +608,16 @@ exports.unarchiveTask = catchAsync(async (req, res, next) => {
     taskId: task._id,
     isArchived: false,
     userId,
+  });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "task.unarchived",
+    targetType: "task",
+    targetId: task._id,
+    targetName: task.title,
   });
 
   res.status(200).json({
@@ -692,6 +771,17 @@ exports.uploadAttachment = catchAsync(async (req, res, next) => {
     userId,
   });
 
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "task.attachment_added",
+    targetType: "task",
+    targetId: task._id,
+    targetName: task.title,
+    details: { field: "attachment", newValue: req.file.originalname },
+  });
+
   res.status(201).json({
     status: "success",
     data: { attachment: savedAttachment },
@@ -733,6 +823,16 @@ exports.deleteAttachment = catchAsync(async (req, res, next) => {
   emitTaskEvent(workspace._id.toString(), "task:updated", {
     taskId: task._id,
     userId,
+  });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "task.attachment_removed",
+    targetType: "task",
+    targetId: task._id,
+    targetName: task.title,
   });
 
   res.status(200).json({

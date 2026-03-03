@@ -5,6 +5,7 @@ const SpreadsheetWorkbook = require("../models/SpreadsheetWorkbook");
 const WorkspaceMember = require("../models/WorkspaceMember");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
+const ActivityLogService = require("../services/activityLog.service");
 
 // Helper: get Socket.io instance (safe)
 const getIO = () => {
@@ -92,7 +93,11 @@ exports.listEvents = catchAsync(async (req, res) => {
   const skip = (pageNum - 1) * limitNum;
 
   const [events, total] = await Promise.all([
-    populateEvent(Event.find(filter)).sort(sort).skip(skip).limit(limitNum).lean(),
+    populateEvent(Event.find(filter))
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
     Event.countDocuments(filter),
   ]);
 
@@ -143,8 +148,15 @@ exports.createEvent = catchAsync(async (req, res, next) => {
   const workspace = req.workspace;
   const userId = req.user.id;
 
-  const { title, description, startDate, endDate, color, status, participants } =
-    req.body;
+  const {
+    title,
+    description,
+    startDate,
+    endDate,
+    color,
+    status,
+    participants,
+  } = req.body;
 
   if (!title || !title.trim()) {
     return next(new AppError("Judul event harus diisi", 400));
@@ -175,10 +187,7 @@ exports.createEvent = catchAsync(async (req, res, next) => {
     }).select("userId");
     if (validMembers.length !== participants.length) {
       return next(
-        new AppError(
-          "Beberapa peserta bukan member workspace ini",
-          400,
-        ),
+        new AppError("Beberapa peserta bukan member workspace ini", 400),
       );
     }
   }
@@ -212,14 +221,22 @@ exports.createEvent = catchAsync(async (req, res, next) => {
   // });
 
   // Populate for response
-  const populatedEvent = await populateEvent(
-    Event.findById(event._id),
-  ).lean();
+  const populatedEvent = await populateEvent(Event.findById(event._id)).lean();
 
   // Emit Socket.io event
   emitEventEvent(workspace._id.toString(), "event:created", {
     event: populatedEvent,
     userId,
+  });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "event.created",
+    targetType: "event",
+    targetId: event._id,
+    targetName: event.title,
   });
 
   res.status(201).json({
@@ -324,9 +341,7 @@ exports.updateEvent = catchAsync(async (req, res, next) => {
   await event.save();
 
   // Populate for response
-  const populatedEvent = await populateEvent(
-    Event.findById(event._id),
-  ).lean();
+  const populatedEvent = await populateEvent(Event.findById(event._id)).lean();
 
   // Attach task count
   const taskCount = await Task.countDocuments({
@@ -339,6 +354,26 @@ exports.updateEvent = catchAsync(async (req, res, next) => {
     event: { ...populatedEvent, taskCount },
     userId,
   });
+
+  // Activity log
+  const changedFields = [];
+  if (title !== undefined) changedFields.push("title");
+  if (description !== undefined) changedFields.push("description");
+  if (startDate !== undefined) changedFields.push("startDate");
+  if (endDate !== undefined) changedFields.push("endDate");
+  if (color !== undefined) changedFields.push("color");
+  if (status !== undefined) changedFields.push("status");
+  if (changedFields.length > 0) {
+    ActivityLogService.log({
+      workspaceId: workspace._id,
+      actorId: userId,
+      action: "event.updated",
+      targetType: "event",
+      targetId: event._id,
+      targetName: event.title,
+      details: { field: changedFields.join(", ") },
+    });
+  }
 
   res.status(200).json({
     status: "success",
@@ -391,6 +426,16 @@ exports.deleteEvent = catchAsync(async (req, res, next) => {
     userId,
   });
 
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "event.deleted",
+    targetType: "event",
+    targetId: event._id,
+    targetName: event.title,
+  });
+
   res.status(200).json({
     status: "success",
     message: "Event berhasil dihapus",
@@ -441,9 +486,7 @@ exports.addParticipant = catchAsync(async (req, res, next) => {
   await event.save();
 
   // Populate for response
-  const populatedEvent = await populateEvent(
-    Event.findById(event._id),
-  ).lean();
+  const populatedEvent = await populateEvent(Event.findById(event._id)).lean();
 
   // Emit Socket.io event
   emitEventEvent(workspace._id.toString(), "event:participant:added", {
@@ -451,6 +494,20 @@ exports.addParticipant = catchAsync(async (req, res, next) => {
     participantId,
     event: populatedEvent,
     userId,
+  });
+
+  // Activity log
+  const participantUser = populatedEvent.participants?.find(
+    (p) => p._id.toString() === participantId,
+  );
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "event.participant_added",
+    targetType: "event",
+    targetId: event._id,
+    targetName: event.title,
+    details: { newValue: participantUser?.name || participantId },
   });
 
   res.status(200).json({
@@ -489,9 +546,7 @@ exports.removeParticipant = catchAsync(async (req, res, next) => {
   await event.save();
 
   // Populate for response
-  const populatedEvent = await populateEvent(
-    Event.findById(event._id),
-  ).lean();
+  const populatedEvent = await populateEvent(Event.findById(event._id)).lean();
 
   // Emit Socket.io event
   emitEventEvent(workspace._id.toString(), "event:participant:removed", {
@@ -499,6 +554,16 @@ exports.removeParticipant = catchAsync(async (req, res, next) => {
     participantId: targetUserId,
     event: populatedEvent,
     userId,
+  });
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "event.participant_removed",
+    targetType: "event",
+    targetId: event._id,
+    targetName: event.title,
   });
 
   res.status(200).json({
@@ -538,4 +603,3 @@ exports.getEventTasks = catchAsync(async (req, res, next) => {
     data: { tasks },
   });
 });
-
