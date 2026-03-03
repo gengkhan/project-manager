@@ -233,20 +233,20 @@
 
 ### 3.2 Activity Log & Audit Trail (Ref: `18-activity-log.md`)
 
-- [ ] **Model**: Buat schema `activity_logs` (TTL index 1 tahun)
-- [ ] **Service**: `ActivityLogService.log()` — service untuk mencatat aksi
-- [ ] **Integrasi**: Panggil ActivityLogService di semua controller (Task, Event, Spreadsheet, Workspace)
-- [ ] **API**: `GET /api/workspaces/:id/activity` — Activity log workspace (paginated, filter)
-- [ ] **API**: `GET /api/workspaces/:id/tasks/:taskId/activity` — Log per task
-- [ ] **API**: `GET /api/workspaces/:id/events/:eventId/activity` — Log per event
-- [ ] **API**: `GET /api/workspaces/:id/members/:userId/activity` — Log per user
-- [ ] **Frontend**: Halaman Activity Log (`/workspace/:id/activity`)
-- [ ] **Frontend**: Filter (user, tipe aksi, rentang tanggal, modul)
-- [ ] **Frontend**: Timeline entry (avatar, nama, aksi, waktu relatif)
-- [ ] **Frontend**: Pagination / infinite scroll
-- [ ] **Frontend**: Tab Activity di Detail Task (scoped)
-- [ ] **Frontend**: Tab Activity di Detail Event (scoped)
-- [ ] **Frontend**: Aktivitas di Profil User (scoped ke workspace)
+- [x] **Model**: Buat schema `activity_logs` (TTL index 1 tahun)
+- [x] **Service**: `ActivityLogService.log()` — service untuk mencatat aksi
+- [x] **Integrasi**: Panggil ActivityLogService di semua controller (Task, Event, Spreadsheet, Workspace)
+- [x] **API**: `GET /api/workspaces/:id/activity` — Activity log workspace (paginated, filter)
+- [x] **API**: `GET /api/workspaces/:id/tasks/:taskId/activity` — Log per task
+- [x] **API**: `GET /api/workspaces/:id/events/:eventId/activity` — Log per event
+- [x] **API**: `GET /api/workspaces/:id/members/:userId/activity` — Log per user
+- [x] **Frontend**: Halaman Activity Log (`/workspace/:id/activity`)
+- [x] **Frontend**: Filter (user, tipe aksi, rentang tanggal, modul)
+- [x] **Frontend**: Timeline entry (avatar, nama, aksi, waktu relatif)
+- [x] **Frontend**: Pagination / infinite scroll
+- [x] **Frontend**: Tab Activity di Detail Task (scoped)
+- [x] **Frontend**: Tab Activity di Detail Event (scoped)
+- [x] **Frontend**: Aktivitas di Profil User (scoped ke workspace)
 - [ ] **Test**: Unit test activity log service
 
 ### 3.3 Export Data (Ref: `19-export-data.md`)
