@@ -7,8 +7,14 @@ import ProtectedRoute from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { connectSocket, disconnectSocket, getSocket } from "@/lib/socket";
+import { useNotifications } from "@/hooks/use-notifications";
+import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +44,9 @@ function Topbar({ workspace, workspaceId }) {
   const router = useRouter();
   const id = workspaceId;
 
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const notificationsHook = useNotifications();
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
       {/* Sidebar trigger (hamburger on mobile, collapse toggle on desktop) */}
@@ -55,16 +64,33 @@ function Topbar({ workspace, workspaceId }) {
       <div className="flex-1" />
 
       {/* Right section */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         {/* Notification bell */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 relative"
+              onClick={() => setIsNotificationsOpen(true)}
+            >
               <Bell className="h-4 w-4" />
+              {notificationsHook.unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>Notifikasi</TooltipContent>
         </Tooltip>
+
+        <NotificationPanel
+          open={isNotificationsOpen}
+          onOpenChange={setIsNotificationsOpen}
+          notificationsHook={notificationsHook}
+        />
 
         {/* User menu */}
         <DropdownMenu>
@@ -88,7 +114,11 @@ function Topbar({ workspace, workspaceId }) {
               <Settings className="h-4 w-4 mr-2" />
               Pengaturan Akun
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push(`/workspace/${id}/members/${user?._id}`)}>
+            <DropdownMenuItem
+              onClick={() =>
+                router.push(`/workspace/${id}/members/${user?._id}`)
+              }
+            >
               <User className="h-4 w-4 mr-2" />
               Lihat Profil
             </DropdownMenuItem>
@@ -179,15 +209,10 @@ export default function WorkspaceLayout({ children, params }) {
   return (
     <ProtectedRoute>
       <SidebarProvider>
-        <AppSidebar
-          workspaceId={id}
-          workspace={currentWorkspace}
-        />
+        <AppSidebar workspaceId={id} workspace={currentWorkspace} />
         <SidebarInset>
           <Topbar workspace={currentWorkspace} workspaceId={id} />
-          <div className="flex-1 overflow-y-auto">
-            {children}
-          </div>
+          <div className="flex-1 overflow-y-auto">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </ProtectedRoute>

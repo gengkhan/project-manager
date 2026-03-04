@@ -66,7 +66,7 @@ app.use("/api/workspaces/:id/events", require("./routes/event.routes"));
 app.use("/api/workspaces/:id/activity", require("./routes/activity.routes"));
 app.use("/api/workspaces/:id/export", require("./routes/export.routes"));
 app.use("/api/export-jobs", require("./routes/exportJob.routes"));
-// app.use('/api/notifications', require('./routes/notification.routes'));
+app.use("/api/notifications", require("./routes/notification.routes"));
 app.use("/api/comments", require("./routes/comment.routes"));
 
 // ────────────────────────────────────────────────────

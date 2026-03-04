@@ -6,6 +6,9 @@ const connectDB = require("./src/config/db");
 const { initializeSocket } = require("./src/config/socket");
 const logger = require("./src/utils/logger");
 
+const startDueDateReminderJob = require("./src/jobs/dueDateReminder.job");
+const startEventReminderJob = require("./src/jobs/eventStartReminder.job");
+
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
@@ -24,6 +27,11 @@ const startServer = async () => {
       `Server berjalan di port ${PORT} (${process.env.NODE_ENV || "development"})`,
     );
     logger.info(`Health check: http://localhost:${PORT}/api/health`);
+
+    // Start cron jobs
+    startDueDateReminderJob();
+    startEventReminderJob();
+    logger.info("Cron jobs started: Due Date Reminders, Event Start Reminders");
   });
 
   // Graceful shutdown

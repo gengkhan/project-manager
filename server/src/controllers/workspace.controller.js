@@ -7,6 +7,7 @@ const emailService = require("../services/email.service");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
 const ActivityLogService = require("../services/activityLog.service");
+const NotificationService = require("../services/notification.service");
 
 // ──────────────────────────────────────────────
 // GET /api/workspaces — Daftar workspace user
@@ -449,6 +450,25 @@ exports.joinViaLink = catchAsync(async (req, res, next) => {
     targetName: workspace.name,
   });
 
+  // Notifikasi new_member
+  const members = await WorkspaceMember.find({
+    workspaceId: workspace._id,
+  }).select("userId");
+  const memberIds = members.map((m) => m.userId.toString());
+
+  const user = await User.findById(userId).select("name");
+
+  await NotificationService.createForMany({
+    workspaceId: workspace._id,
+    recipientIds: memberIds,
+    actorId: userId,
+    type: "new_member",
+    targetType: "workspace",
+    targetId: workspace._id,
+    message: `${user.name} bergabung ke workspace`,
+    url: `/workspace/${workspace._id}/members`,
+  });
+
   res.status(200).json({
     status: "success",
     message: `Berhasil bergabung ke workspace "${workspace.name}"`,
@@ -513,6 +533,35 @@ exports.joinViaInvitation = catchAsync(async (req, res, next) => {
   invitation.status = "accepted";
   invitation.acceptedAt = new Date();
   await invitation.save();
+
+  // Activity log
+  ActivityLogService.log({
+    workspaceId: workspace._id,
+    actorId: userId,
+    action: "workspace.member_joined",
+    targetType: "workspace",
+    targetId: workspace._id,
+    targetName: workspace.name,
+  });
+
+  // Notifikasi new_member
+  const members = await WorkspaceMember.find({
+    workspaceId: workspace._id,
+  }).select("userId");
+  const memberIds = members.map((m) => m.userId.toString());
+
+  const user = await User.findById(userId).select("name");
+
+  await NotificationService.createForMany({
+    workspaceId: workspace._id,
+    recipientIds: memberIds,
+    actorId: userId,
+    type: "new_member",
+    targetType: "workspace",
+    targetId: workspace._id,
+    message: `${user.name} menerima undangan workspace`,
+    url: `/workspace/${workspace._id}/members`,
+  });
 
   res.status(200).json({
     status: "success",

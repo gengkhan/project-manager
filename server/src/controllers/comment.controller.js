@@ -3,6 +3,8 @@ const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
 const { log: logActivity } = require("../services/activityLog.service");
 const { getIO } = require("../config/socket");
+const NotificationService = require("../services/notification.service");
+const mongoose = require("mongoose");
 
 // ──────────────────────────────────────────────
 // GET /api/comments — Daftar komentar
@@ -104,6 +106,106 @@ exports.createComment = catchAsync(async (req, res, next) => {
       contextId: targetId,
     },
   });
+
+  // ── Trigger Notifications ──
+  const mentionedUserIds = Array.isArray(mentions)
+    ? mentions.map((m) => m.userId)
+    : [];
+
+  // URL context
+  let commentUrl = "";
+  if (targetType === "task")
+    commentUrl = `/workspace/${workspaceId}/tasks/${targetId}`;
+  else if (targetType === "event")
+    commentUrl = `/workspace/${workspaceId}/events/${targetId}`;
+  else if (targetType === "workspace") commentUrl = `/workspace/${workspaceId}`;
+
+  // 1. Mention Notifications
+  if (mentionedUserIds.length > 0) {
+    let mentionContext = "komentar";
+    if (targetType === "task") mentionContext = "komentar task";
+    else if (targetType === "event") mentionContext = "komentar event";
+
+    await NotificationService.createForMany({
+      workspaceId,
+      recipientIds: mentionedUserIds,
+      actorId: req.user.id,
+      type: "mention",
+      targetType: "comment",
+      targetId: comment._id,
+      message: `menyebut kamu di ${mentionContext}`,
+      url: commentUrl,
+    });
+  }
+
+  // 2. New Comment Notifications (to watchers/assignees/participants depending on targetType)
+  if (targetType === "task") {
+    try {
+      const Task = mongoose.model("Task");
+      const task = await Task.findById(targetId).select(
+        "assignees watchers title",
+      );
+      if (task) {
+        // Collect all assignees and watchers
+        const notifySet = new Set([
+          ...task.assignees.map((id) => id.toString()),
+          ...task.watchers.map((id) => id.toString()),
+        ]);
+
+        // Remove author and mentioned users
+        notifySet.delete(req.user.id.toString());
+        mentionedUserIds.forEach((id) => notifySet.delete(id.toString()));
+
+        if (notifySet.size > 0) {
+          await NotificationService.createForMany({
+            workspaceId,
+            recipientIds: Array.from(notifySet),
+            actorId: req.user.id,
+            type: "new_comment",
+            targetType: "comment",
+            targetId: comment._id,
+            message: `Komentar baru di task: ${task.title}`,
+            url: commentUrl,
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Failed to trigger new_comment notification for task:",
+        err,
+      );
+    }
+  } else if (targetType === "event") {
+    try {
+      const Event = mongoose.model("Event");
+      const event = await Event.findById(targetId).select("participants title");
+      if (event) {
+        const notifySet = new Set(
+          event.participants.map((id) => id.toString()),
+        );
+        notifySet.delete(req.user.id.toString());
+        mentionedUserIds.forEach((id) => notifySet.delete(id.toString()));
+
+        if (notifySet.size > 0) {
+          await NotificationService.createForMany({
+            workspaceId,
+            recipientIds: Array.from(notifySet),
+            actorId: req.user.id,
+            type: "new_comment",
+            targetType: "comment",
+            targetId: comment._id,
+            message: `Komentar baru di event: ${event.title}`,
+            url: commentUrl,
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Failed to trigger new_comment notification for event:",
+        err,
+      );
+    }
+  }
 
   res.status(201).json({
     status: "success",

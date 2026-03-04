@@ -312,22 +312,22 @@
 
 ### 4.3 Notifikasi In-App (Ref: `16-notifikasi-in-app.md`)
 
-- [ ] **Model**: Buat schema `notifications` (indexes)
-- [ ] **Service**: `NotificationService.create()` — buat notifikasi
-- [ ] **Integrasi**: Trigger notifikasi dari semua aksi (mention, assign, due date, komentar, dll)
-- [ ] **Cron**: Due date reminder (daily cron job)
-- [ ] **Cron**: Event start reminder (daily cron job)
-- [ ] **API**: `GET /api/notifications` — Polling notifikasi baru
-- [ ] **API**: `GET /api/notifications/unread-count` — Badge counter
-- [ ] **API**: `PUT /api/notifications/:id/read` — Mark as read
-- [ ] **API**: `PUT /api/notifications/read-all` — Mark all read
-- [ ] **Frontend**: Bell icon di topbar (badge counter)
-- [ ] **Frontend**: Panel notifikasi (slide-in kanan)
-- [ ] **Frontend**: Render notifikasi (avatar, pesan, waktu, dot unread)
-- [ ] **Frontend**: Filter notifikasi per tipe
-- [ ] **Frontend**: Klik notifikasi → navigasi ke halaman terkait
-- [ ] **Frontend**: Polling mechanism (15 detik aktif, 60 detik idle)
-- [ ] **Frontend**: Mark as read (per satu / semua)
+- [x] **Model**: Buat schema `notifications` (indexes)
+- [x] **Service**: `NotificationService.create()` — buat notifikasi
+- [x] **Integrasi**: Trigger notifikasi dari semua aksi (mention, assign, due date, komentar, dll)
+- [x] **Cron**: Due date reminder (daily cron job)
+- [x] **Cron**: Event start reminder (daily cron job)
+- [x] **API**: `GET /api/notifications` — Polling notifikasi baru
+- [x] **API**: `GET /api/notifications/unread-count` — Badge counter
+- [x] **API**: `PUT /api/notifications/:id/read` — Mark as read
+- [x] **API**: `PUT /api/notifications/read-all` — Mark all read
+- [x] **Frontend**: Bell icon di topbar (badge counter)
+- [x] **Frontend**: Panel notifikasi (slide-in kanan)
+- [x] **Frontend**: Render notifikasi (avatar, pesan, waktu, dot unread)
+- [x] **Frontend**: Filter notifikasi per tipe
+- [x] **Frontend**: Klik notifikasi → navigasi ke halaman terkait
+- [x] **Frontend**: Polling mechanism (15 detik aktif, 60 detik idle)
+- [x] **Frontend**: Mark as read (per satu / semua)
 - [ ] **Test**: Unit test notification service & API
 
 ### 4.4 Notifikasi WhatsApp (Ref: `17-notifikasi-whatsapp.md`)

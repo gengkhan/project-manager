@@ -6,6 +6,7 @@ const WorkspaceMember = require("../models/WorkspaceMember");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
 const ActivityLogService = require("../services/activityLog.service");
+const NotificationService = require("../services/notification.service");
 
 // Helper: get Socket.io instance (safe)
 const getIO = () => {
@@ -239,6 +240,33 @@ exports.createEvent = catchAsync(async (req, res, next) => {
     targetName: event.title,
   });
 
+  // ── Trigger Notifications ──
+  // 1. Mention Notification (from description)
+  if (description) {
+    try {
+      const descObj = JSON.parse(description);
+      if (
+        descObj &&
+        Array.isArray(descObj.mentions) &&
+        descObj.mentions.length > 0
+      ) {
+        const mentionedUserIds = descObj.mentions.map((m) => m.userId);
+        await NotificationService.createForMany({
+          workspaceId: workspace._id,
+          recipientIds: mentionedUserIds,
+          actorId: userId,
+          type: "mention",
+          targetType: "event",
+          targetId: event._id,
+          message: `menyebut kamu di deskripsi event "${event.title}"`,
+          url: `/workspace/${workspace._id}/events/${event._id}`,
+        });
+      }
+    } catch (err) {
+      // Ignore JSON parse errors
+    }
+  }
+
   res.status(201).json({
     status: "success",
     data: { event: populatedEvent },
@@ -291,6 +319,9 @@ exports.updateEvent = catchAsync(async (req, res, next) => {
   if (!event) {
     return next(new AppError("Event tidak ditemukan", 404));
   }
+
+  // Backup original state
+  const oldDescription = event.description;
 
   const { title, description, startDate, endDate, color, status } = req.body;
 
@@ -373,6 +404,43 @@ exports.updateEvent = catchAsync(async (req, res, next) => {
       targetName: event.title,
       details: { field: changedFields.join(", ") },
     });
+  }
+
+  // ── Trigger Notifications ──
+  // Mention Notification (from new description)
+  if (description !== undefined && description !== oldDescription) {
+    try {
+      const newDescObj = JSON.parse(description);
+      const oldDescObj = oldDescription
+        ? JSON.parse(oldDescription)
+        : { mentions: [] };
+
+      const newMentions = Array.isArray(newDescObj.mentions)
+        ? newDescObj.mentions.map((m) => m.userId.toString())
+        : [];
+      const oldMentions = Array.isArray(oldDescObj.mentions)
+        ? oldDescObj.mentions.map((m) => m.userId.toString())
+        : [];
+
+      const newlyMentionedUserIds = newMentions.filter(
+        (id) => !oldMentions.includes(id),
+      );
+
+      if (newlyMentionedUserIds.length > 0) {
+        await NotificationService.createForMany({
+          workspaceId: workspace._id,
+          recipientIds: newlyMentionedUserIds,
+          actorId: userId,
+          type: "mention",
+          targetType: "event",
+          targetId: event._id,
+          message: `menyebut kamu di deskripsi event "${event.title}"`,
+          url: `/workspace/${workspace._id}/events/${event._id}`,
+        });
+      }
+    } catch (err) {
+      // Ignore JSON parse errors
+    }
   }
 
   res.status(200).json({
