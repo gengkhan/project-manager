@@ -346,12 +346,13 @@ Menampilkan task dalam format mini kanban atau daftar. Data terhubung langsung k
 
 Bisa difilter untuk menampilkan task dari event tertentu, assignee tertentu, atau label tertentu.
 
-#### Widget Mind Map
+#### Widget Diagram
 
-Node-based diagram untuk memetakan ide secara visual. Fitur:
+Diagram freeform untuk memetakan ide, alur, dan hubungan secara visual — terinspirasi dari Draw.io dan FigJam. Fitur:
 
-- Buat node induk dan node anak (child node)
-- Koneksi antar node dengan garis
+- Letakkan berbagai bentuk (rectangle, ellipse, diamond, sticky note, dll.) di mana saja
+- Hubungkan node secara bebas ke segala arah dengan garis koneksi
+- Beri label pada koneksi, atur gaya garis, warna, dan arah panah
 - Ubah warna, bentuk, dan ukuran node
 - Tambahkan ikon pada node
 - Double-klik node untuk edit teks
@@ -524,7 +525,7 @@ Setiap entri menampilkan: foto profil dan nama user pelaku, deskripsi aksi, nama
 
 - Canvas penuh ke **PNG** (resolusi tinggi)
 - Canvas penuh ke **PDF**
-- Mind map spesifik ke **PNG**
+- Diagram spesifik ke **PNG**
 
 #### Mekanisme Export
 
@@ -601,7 +602,7 @@ Di mobile, board brainstorming masuk ke mode **tampilan** — user bisa melihat 
 ### Alur Sesi Brainstorming
 
 1. Buka **Brainstorming** → pilih board yang ada atau buat board baru
-2. Tambahkan widget sesuai kebutuhan: mulai dengan teks atau mind map untuk menuangkan ide
+2. Tambahkan widget sesuai kebutuhan: mulai dengan teks atau diagram untuk menuangkan ide
 3. Tambahkan widget task untuk menghubungkan ide dengan pekerjaan nyata
 4. Mention anggota tim di widget teks untuk memberitahu mereka tentang ide atau tugas terkait
 5. Atur posisi dan ukuran widget hingga tampilan sesuai keinginan
@@ -672,7 +673,7 @@ Hasil akhir fase ini: tim bisa berdiskusi, mention, dan tetap terinformasi tanpa
 Membangun fitur kreatif:
 
 - Infinite canvas
-- Semua tipe widget (Task, Mind Map, Gambar, Teks WYSIWYG)
+- Semua tipe widget (Task, Diagram, Gambar, Teks WYSIWYG)
 - Drag & drop dan resize widget
 - Mention di widget
 - Export canvas
@@ -706,7 +707,7 @@ Menyempurnakan pengalaman pengguna:
 | Task Kalender View                    | 🔵 Direncanakan | Fase 2 |
 | Relasi Task → Event (opsional)        | 🔵 Direncanakan | Fase 2 |
 | Brainstorming — Widget Task           | 🔵 Direncanakan | Fase 5 |
-| Brainstorming — Widget Mind Map       | 🔵 Direncanakan | Fase 5 |
+| Brainstorming — Widget Diagram        | 🔵 Direncanakan | Fase 5 |
 | Brainstorming — Widget Gambar         | 🔵 Direncanakan | Fase 5 |
 | Brainstorming — Widget Teks WYSIWYG   | 🔵 Direncanakan | Fase 5 |
 

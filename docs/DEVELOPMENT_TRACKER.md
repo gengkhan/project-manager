@@ -385,28 +385,29 @@
 
 ### 5.2 Widget Task (Ref: `10-widget-task.md`)
 
-- [ ] **Frontend**: Custom React Flow node — TaskWidgetNode
-- [ ] **Frontend**: Mode mini kanban (kolom workspace, drag & drop)
-- [ ] **Frontend**: Mode list (sortable)
-- [ ] **Frontend**: Filter per widget (event, assignee, label, prioritas)
-- [ ] **Frontend**: Buat task dari widget (quick create)
-- [ ] **Frontend**: Sinkronisasi 2-arah dengan modul Task utama
-- [ ] **Test**: Test widget task
+- [x] **Frontend**: Custom React Flow node — TaskWidgetNode (Single Task View)
+- [x] **Frontend**: State "Belum Dihubungkan" (Combobox pencarian task)
+- [x] **Frontend**: State "Task Terpilih" (menampilkan satu Task Card utuh)
+- [x] **Frontend**: Sinkronisasi 2-arah dengan modul Task utama
+- [x] **Test**: Test widget task
 
-### 5.3 Widget Mind Map (Ref: `11-widget-mind-map.md`)
+### 5.3 Widget Diagram (Ref: `11-widget-diagram.md`)
 
-- [ ] **Frontend**: Custom React Flow node — MindMapWidgetNode
-- [ ] **Frontend**: Nested React Flow instance di dalam widget
-- [ ] **Frontend**: Buat node (double-klik, tombol "+", Enter sibling, Tab child)
-- [ ] **Frontend**: Edit node (double-klik teks, Enter selesai)
-- [ ] **Frontend**: Hapus node (Delete key, context menu)
-- [ ] **Frontend**: Move node (drag)
-- [ ] **Frontend**: Koneksi parent-child otomatis
-- [ ] **Frontend**: Cross-link antar node
-- [ ] **Frontend**: Kustomisasi node (warna, bentuk, ukuran, border, ikon)
-- [ ] **Frontend**: Auto Layout (horizontal, vertical, radial)
-- [ ] **Frontend**: Export mind map ke PNG
-- [ ] **Test**: Test widget mind map
+- [x] **Frontend**: Custom React Flow node — DiagramWidgetNode
+- [x] **Frontend**: Nested React Flow instance di dalam widget (freeform canvas)
+- [x] **Frontend**: Expanded shapes (Rectangle, Rounded, Ellipse, Diamond, Parallelogram, Hexagon, Triangle, Sticky Note)
+- [x] **Frontend**: Buat node (double-klik canvas, palette shapes)
+- [x] **Frontend**: Edit node (double-klik teks, Enter selesai)
+- [x] **Frontend**: Hapus node (Delete key, context menu)
+- [x] **Frontend**: Move node (drag)
+- [x] **Frontend**: Freeform connections (drag handle-to-handle, any direction)
+- [x] **Frontend**: Edge labels (klik untuk edit label koneksi)
+- [x] **Frontend**: Edge styling (line style, color, arrow type per edge)
+- [x] **Frontend**: Kustomisasi node (warna, bentuk, ukuran, border, ikon)
+- [x] **Frontend**: Richer context menu (color picker, shape change, duplicate)
+- [x] **Frontend**: Auto Arrange (dagre-based layout)
+- [x] **Frontend**: Export diagram ke PNG
+- [ ] **Test**: Test widget diagram
 
 ### 5.4 Widget Gambar (Ref: `12-widget-gambar.md`)
 

@@ -33,8 +33,8 @@ const WIDGET_TYPES = [
     color: "text-blue-500",
   },
   {
-    type: "mindmap",
-    label: "Widget Mind Map",
+    type: "diagram",
+    label: "Widget Diagram",
     icon: BrainCircuit,
     color: "text-purple-500",
   },

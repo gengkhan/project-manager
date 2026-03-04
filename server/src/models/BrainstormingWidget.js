@@ -11,7 +11,7 @@ const brainstormingWidgetSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: {
-        values: ["task", "mindmap", "image", "text"],
+        values: ["task", "mindmap", "diagram", "image", "text"],
         message:
           "Tipe widget harus salah satu dari: task, mindmap, image, text",
       },

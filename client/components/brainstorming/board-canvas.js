@@ -90,7 +90,7 @@ function CanvasInner({
 }) {
   const { zoomIn, zoomOut, fitView, getZoom } = useReactFlow();
   const viewport = useViewport();
-  const [showMinimap, setShowMinimap] = useState(true);
+  const [showMinimap, setShowMinimap] = useState(false);
 
   // Use refs for handlers to avoid stale closures in node data
   const handlersRef = useRef({});

@@ -31,6 +31,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { TaskWidgetNode } from "./task-widget-node";
+import { DiagramWidgetNode } from "./diagram/diagram-widget-node";
 
 const WIDGET_ICONS = {
   task: {
@@ -43,7 +44,13 @@ const WIDGET_ICONS = {
     icon: BrainCircuit,
     color: "text-purple-500",
     bg: "bg-purple-500/10",
-    label: "Mind Map",
+    label: "Diagram",
+  },
+  diagram: {
+    icon: BrainCircuit,
+    color: "text-purple-500",
+    bg: "bg-purple-500/10",
+    label: "Diagram",
   },
   image: {
     icon: Image,
@@ -102,12 +109,13 @@ function WidgetNodeComponent({ id, data, selected }) {
           />
         );
       case "mindmap":
+      case "diagram":
         return (
-          <div className="p-3 text-xs text-muted-foreground">
-            <p className="italic">
-              Widget Mind Map — konten akan diimplementasikan di Fase 5.3
-            </p>
-          </div>
+          <DiagramWidgetNode
+            widgetId={id}
+            widgetData={widgetData}
+            onUpdateWidget={(wId, data) => onUpdate?.(wId, data)}
+          />
         );
       case "image":
         return (
