@@ -29,8 +29,7 @@ const positionToSide = {
 
 function getSideFromHandleId(handleId) {
   if (!handleId) return "right";
-  const side = handleId.replace("-source", "");
-  return positionToSide[side] || "right";
+  return positionToSide[handleId] || "right";
 }
 
 // Convert a widget from API to a React Flow node
@@ -64,7 +63,7 @@ function connectionToEdge(c, onDelete, isReadOnly) {
     id: c._id,
     source: c.fromWidgetId,
     target: c.toWidgetId,
-    sourceHandle: c.fromSide + "-source",
+    sourceHandle: c.fromSide,
     targetHandle: c.toSide,
     type: "connection",
     data: {
@@ -291,11 +290,6 @@ function CanvasInner({
     [onUpdateWidget],
   );
 
-  // ── Persist size on resize stop ─────────────────
-  const onNodeResize = useCallback((_event, { id, width, height }) => {
-    // This fires for NodeResizer interactions
-  }, []);
-
   // ── Connect ─────────────────────────────────────
   const onConnect = useCallback(
     (params) => {
@@ -311,6 +305,44 @@ function CanvasInner({
       onAddConnection?.(connectionData);
     },
     [onAddConnection, isReadOnly],
+  );
+
+  // ── Reconnect ───────────────────────────────────
+  const onReconnect = useCallback(
+    (oldEdge, newConnection) => {
+      if (isReadOnly) return;
+
+      const updates = {
+        fromWidgetId: newConnection.source,
+        fromSide: getSideFromHandleId(newConnection.sourceHandle),
+        toWidgetId: newConnection.target,
+        toSide: getSideFromHandleId(newConnection.targetHandle),
+      };
+
+      onUpdateConnection?.(oldEdge.id, updates);
+    },
+    [onUpdateConnection, isReadOnly],
+  );
+
+  // ── Keyboard Delete ─────────────────────────────
+  const onEdgesDelete = useCallback(
+    (deletedEdges) => {
+      if (isReadOnly) return;
+      deletedEdges.forEach((edge) => {
+        onDeleteConnection?.(edge.id);
+      });
+    },
+    [onDeleteConnection, isReadOnly],
+  );
+
+  const onNodesDelete = useCallback(
+    (deletedNodes) => {
+      if (isReadOnly) return;
+      deletedNodes.forEach((node) => {
+        onDeleteWidget?.(node.id);
+      });
+    },
+    [onDeleteWidget, isReadOnly],
   );
 
   // ── Add widget from toolbar ─────────────────────
@@ -357,6 +389,9 @@ function CanvasInner({
         onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
+        onReconnect={onReconnect}
+        onEdgesDelete={onEdgesDelete}
+        onNodesDelete={onNodesDelete}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
@@ -364,10 +399,14 @@ function CanvasInner({
         defaultEdgeOptions={{
           type: "connection",
         }}
+        connectionMode="loose"
         connectionLineStyle={{
-          stroke: "hsl(var(--primary))",
-          strokeWidth: 2,
+          stroke: "#3b82f6",
+          strokeWidth: 3,
         }}
+        isValidConnection={(connection) =>
+          connection.source !== connection.target
+        }
         snapToGrid
         snapGrid={[10, 10]}
         deleteKeyCode={isReadOnly ? null : "Delete"}

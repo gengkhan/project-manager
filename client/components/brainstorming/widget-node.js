@@ -30,6 +30,7 @@ import {
   FileText,
   GripVertical,
 } from "lucide-react";
+import { TaskWidgetNode } from "./task-widget-node";
 
 const WIDGET_ICONS = {
   task: {
@@ -59,10 +60,8 @@ const WIDGET_ICONS = {
 };
 
 const HANDLE_STYLE = {
-  width: 8,
-  height: 8,
-  background: "hsl(var(--primary))",
-  border: "2px solid hsl(var(--background))",
+  width: "0.8rem",
+  height: "0.8rem",
 };
 
 function WidgetNodeComponent({ id, data, selected }) {
@@ -96,11 +95,11 @@ function WidgetNodeComponent({ id, data, selected }) {
     switch (type) {
       case "task":
         return (
-          <div className="p-3 text-xs text-muted-foreground">
-            <p className="italic">
-              Widget Task — konten akan diimplementasikan di Fase 5.2
-            </p>
-          </div>
+          <TaskWidgetNode
+            widgetId={id}
+            widgetData={widgetData}
+            onUpdateWidget={(wId, data) => onUpdate?.(wId, data)}
+          />
         );
       case "mindmap":
         return (
@@ -133,71 +132,58 @@ function WidgetNodeComponent({ id, data, selected }) {
   };
 
   return (
-    <>
+    <div className="group w-full h-full relative">
       {/* Resizer - only when selected and not locked */}
       <NodeResizer
         isVisible={selected && !isLocked}
         minWidth={200}
         minHeight={80}
+        onResizeEnd={(e, params) => {
+          onUpdate?.(id, {
+            width: Math.round(params.width),
+            height: Math.round(params.height),
+            x: Math.round(params.x),
+            y: Math.round(params.y),
+          });
+        }}
         lineClassName="!border-primary/50"
         handleClassName="!w-2.5 !h-2.5 !bg-primary !border-2 !border-background !rounded-sm"
       />
 
-      {/* Connection handles (4 sides) */}
+      {/* Connection handles — one per side, visible on hover */}
       <Handle
-        type="target"
+        type="source"
         position={Position.Top}
         id="top"
+        className="transition-all duration-200 opacity-0 group-hover:opacity-100 hover:!opacity-100"
         style={HANDLE_STYLE}
       />
       <Handle
         type="source"
-        position={Position.Top}
-        id="top-source"
-        style={{ ...HANDLE_STYLE, top: -4 }}
-      />
-      <Handle
-        type="target"
         position={Position.Bottom}
         id="bottom"
+        className="transition-all duration-200 opacity-0 group-hover:opacity-100 hover:!opacity-100"
         style={HANDLE_STYLE}
       />
       <Handle
         type="source"
-        position={Position.Bottom}
-        id="bottom-source"
-        style={{ ...HANDLE_STYLE, bottom: -4 }}
-      />
-      <Handle
-        type="target"
         position={Position.Left}
         id="left"
+        className="transition-all duration-200 opacity-0 group-hover:opacity-100 hover:!opacity-100"
         style={HANDLE_STYLE}
       />
       <Handle
         type="source"
-        position={Position.Left}
-        id="left-source"
-        style={{ ...HANDLE_STYLE, left: -4 }}
-      />
-      <Handle
-        type="target"
         position={Position.Right}
         id="right"
+        className="transition-all duration-200 opacity-0 group-hover:opacity-100 hover:!opacity-100"
         style={HANDLE_STYLE}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="right-source"
-        style={{ ...HANDLE_STYLE, right: -4 }}
       />
 
       <div
-        className={`bg-background border rounded-lg shadow-sm overflow-hidden transition-shadow ${
+        className={`bg-background border rounded-lg shadow-sm transition-shadow flex flex-col w-full h-full ${
           selected ? "ring-2 ring-primary/50 shadow-md" : "hover:shadow-md"
         }`}
-        style={{ width: "100%", height: "100%" }}
       >
         {/* Header */}
         <div
@@ -295,9 +281,13 @@ function WidgetNodeComponent({ id, data, selected }) {
         </div>
 
         {/* Content (hidden when collapsed) */}
-        {!isCollapsed && renderContent()}
+        {!isCollapsed && (
+          <div className="flex-1 overflow-auto bg-muted/10 rounded-b-lg">
+            {renderContent()}
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 

@@ -53,6 +53,11 @@ const NAV_MAIN = [
     icon: CalendarRange,
     href: "/events",
   },
+  {
+    label: "Brainstorming",
+    icon: Lightbulb,
+    href: "/brainstorming",
+  },
 ];
 
 const NAV_TASKS = [
@@ -69,11 +74,6 @@ const NAV_TASKS = [
 ];
 
 const NAV_OTHER = [
-  {
-    label: "Brainstorming",
-    icon: Lightbulb,
-    href: "/brainstorming",
-  },
   {
     label: "Activity Log",
     icon: History,
@@ -100,12 +100,13 @@ function WorkspaceSwitcher({ workspaceId, workspace }) {
   const router = useRouter();
   const { workspaces } = useWorkspace();
 
-  const initials = workspace?.name
-    ?.split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "WS";
+  const initials =
+    workspace?.name
+      ?.split(" ")
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "WS";
 
   return (
     <SidebarMenu>
@@ -143,7 +144,9 @@ function WorkspaceSwitcher({ workspaceId, workspace }) {
               <DropdownMenuItem
                 key={ws._id}
                 onClick={() => router.push(`/workspace/${ws._id}`)}
-                className={ws._id === workspaceId ? "bg-accent font-medium" : ""}
+                className={
+                  ws._id === workspaceId ? "bg-accent font-medium" : ""
+                }
               >
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary/10 text-primary text-[10px] font-bold mr-2">
                   {ws.name
@@ -180,11 +183,7 @@ function NavGroup({ items, basePath, pathname }) {
         const active = isActive(pathname, basePath, item.href);
         return (
           <SidebarMenuItem key={item.href}>
-            <SidebarMenuButton
-              asChild
-              isActive={active}
-              tooltip={item.label}
-            >
+            <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
               <Link href={`${basePath}${item.href}`}>
                 <item.icon />
                 <span>{item.label}</span>
@@ -206,10 +205,7 @@ export function AppSidebar({ workspaceId, workspace, ...props }) {
     <Sidebar collapsible="icon" {...props}>
       {/* Header: Workspace Switcher */}
       <SidebarHeader>
-        <WorkspaceSwitcher
-          workspaceId={workspaceId}
-          workspace={workspace}
-        />
+        <WorkspaceSwitcher workspaceId={workspaceId} workspace={workspace} />
       </SidebarHeader>
 
       {/* Content: Navigation */}
@@ -266,4 +262,3 @@ export function AppSidebar({ workspaceId, workspace, ...props }) {
     </Sidebar>
   );
 }
-
