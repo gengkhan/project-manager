@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useComments } from "@/hooks/use-comments";
 import { CommentItem } from "./comment-item";
 import { Loader2 } from "lucide-react";
+import { MentionEditor } from "../mention-editor";
 
 export function CommentThread({
   workspaceId,
@@ -40,20 +41,24 @@ export function CommentThread({
   } = useComments(workspaceId, targetType, targetId);
 
   const [newComment, setNewComment] = useState("");
+  const [mentions, setMentions] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
   const [showResolved, setShowResolved] = useState(false);
   const [sortOrder, setSortOrder] = useState("asc"); // 'asc' = oldest first, 'desc' = newest first
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    if (!newComment.trim() || isSubmitting) return;
+    if (!newComment.trim() || newComment === "[]" || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
-      await createComment(newComment, replyTo);
+      await createComment(newComment, replyTo, mentions);
       setNewComment("");
+      setMentions([]);
       setReplyTo(null);
+      setEditorKey((prev) => prev + 1);
     } catch (error) {
       console.error(error);
     } finally {
@@ -209,24 +214,18 @@ export function CommentThread({
             replyTo && "rounded-tl-none border-t-0",
           )}
         >
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              replyTo ? "Tulis balasan..." : "Tulis komentar... (@mention)"
-            }
-            className="w-full bg-transparent p-3 text-xs min-h-[80px] focus:outline-none resize-none placeholder:text-muted-foreground/60"
-          />
+          <div className="min-h-[80px] w-full py-2 px-6 bg-transparent text-xs rounded-t-xl group-focus-within:bg-accent/10">
+            <MentionEditor
+              key={`comment-editor-${editorKey}`}
+              workspaceId={workspaceId}
+              initialContent={newComment}
+              onChange={(val) => setNewComment(val)}
+              onMentionsChange={(m) => setMentions(m)}
+              className="blocknote-compact"
+            />
+          </div>
 
-          <div className="flex items-center justify-between px-3 pb-3">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-muted-foreground italic flex items-center gap-1 opacity-60">
-                <Hash className="h-2.5 w-2.5" />
-                Ctrl+Enter untuk kirim
-              </span>
-            </div>
-
+          <div className="flex items-center justify-end px-3 pb-3">
             <Button
               type="submit"
               disabled={!newComment.trim() || isSubmitting}

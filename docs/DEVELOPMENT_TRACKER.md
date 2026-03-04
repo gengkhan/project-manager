@@ -300,13 +300,13 @@
 
 ### 4.2 Mention User (Ref: `14-mention-user.md`)
 
-- [ ] **API**: `GET /api/workspaces/:id/members/search` — Autocomplete member
-- [ ] **Frontend**: Komponen MentionEditor (BlockNote + custom suggestion menu)
-- [ ] **Frontend**: Custom inline content type "mention"
-- [ ] **Frontend**: Dropdown autocomplete (avatar + nama + role)
-- [ ] **Frontend**: Tampilan mention tag (badge berwarna, klikabel ke profil)
-- [ ] **Frontend**: Hover card profil saat hover mention
-- [ ] **Frontend**: Integrasi mention di: deskripsi task, komentar, widget teks
+- [x] **API**: `GET /api/workspaces/:id/members/search` — Autocomplete member
+- [x] **Frontend**: Komponen MentionEditor (BlockNote + custom suggestion menu)
+- [x] **Frontend**: Custom inline content type "mention"
+- [x] **Frontend**: Dropdown autocomplete (avatar + nama + role)
+- [x] **Frontend**: Tampilan mention tag (badge berwarna, klikabel ke profil)
+- [x] **Frontend**: Hover card profil saat hover mention
+- [x] **Frontend**: Integrasi mention di: deskripsi task, komentar, widget teks
 - [ ] **Backend**: Trigger notifikasi saat mention terdeteksi
 - [ ] **Test**: Unit test mention autocomplete
 

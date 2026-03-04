@@ -46,15 +46,15 @@ import { getInitials, PRIORITY_CONFIG } from "./task-card";
 import { SubtaskChecklist } from "./subtask-checklist";
 import { AttachmentSection } from "./attachment-section";
 
-// Lazy-load BlockNote to avoid SSR issues
-const BlockNoteEditor = lazy(() =>
-  import("@/components/blocknote-editor").then((m) => ({
-    default: m.BlockNoteEditor,
+// Lazy-load MentionEditor to avoid SSR issues
+const MentionEditor = lazy(() =>
+  import("@/components/mention-editor").then((m) => ({
+    default: m.MentionEditor,
   })),
 );
-const BlockNoteReadOnly = lazy(() =>
-  import("@/components/blocknote-editor").then((m) => ({
-    default: m.BlockNoteReadOnly,
+const MentionReadOnly = lazy(() =>
+  import("@/components/mention-editor").then((m) => ({
+    default: m.MentionReadOnly,
   })),
 );
 // Static import for the helper
@@ -110,12 +110,14 @@ export function TabDetail({
 
   // Description — debounced auto-save
   const handleDescChange = useCallback(
-    (jsonString) => {
+    (jsonString, extractedMentions) => {
       descValueRef.current = jsonString;
       if (descTimerRef.current) clearTimeout(descTimerRef.current);
       descTimerRef.current = setTimeout(() => {
         if (descValueRef.current !== task.description) {
           onUpdate({ description: descValueRef.current });
+          // Note: Full implementation would also send custom mentions if supported at the task level
+          // For now, task description update primarily updates the 'description' field.
         }
       }, 800);
     },
@@ -585,7 +587,7 @@ export function TabDetail({
         </div>
 
         {editingDesc ? (
-          <div className="rounded-md border bg-background min-h-[120px] max-h-[300px] overflow-y-auto focus-within:ring-1 focus-within:ring-ring transition-shadow py-2 px-6">
+          <div className="rounded-md border bg-background focus-within:ring-1 focus-within:ring-ring transition-shadow py-2 px-6">
             <Suspense
               fallback={
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
@@ -594,11 +596,11 @@ export function TabDetail({
                 </div>
               }
             >
-              <BlockNoteEditor
+              <MentionEditor
                 key={`desc-${task._id}-${descEditorKey}`}
+                workspaceId={workspaceId}
                 initialContent={task.description || null}
                 onChange={handleDescChange}
-                placeholder="Tulis deskripsi task..."
                 className="blocknote-compact"
               />
             </Suspense>
@@ -620,7 +622,7 @@ export function TabDetail({
                   </div>
                 }
               >
-                <BlockNoteReadOnly
+                <MentionReadOnly
                   content={task.description}
                   className="blocknote-compact"
                 />

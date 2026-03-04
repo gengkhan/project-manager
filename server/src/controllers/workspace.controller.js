@@ -846,3 +846,54 @@ exports.transferOwnership = catchAsync(async (req, res, next) => {
     message: "Ownership berhasil ditransfer",
   });
 });
+
+// ──────────────────────────────────────────────
+// GET /api/workspaces/:id/members/search — Autocomplete member
+// ──────────────────────────────────────────────
+exports.searchMembers = catchAsync(async (req, res, next) => {
+  const workspaceId = req.workspace._id;
+  const { q } = req.query;
+
+  let query = { workspaceId };
+
+  // Fetch all members, we will filter by name in memory using populated userId
+  let members = await WorkspaceMember.find(query)
+    .populate({
+      path: "userId",
+      match: q ? { name: { $regex: q, $options: "i" } } : {},
+      select: "name avatar email",
+    })
+    .lean();
+
+  // Filter out those where populated userId is null (no match)
+  members = members.filter((m) => m.userId !== null);
+
+  // Return up to 10 results
+  members = members.slice(0, 10);
+
+  // Cek status online via socket (optional, fallback to false if not found)
+  const { getIO } = require("../config/socket");
+  const io = getIO();
+  let onlineUsers = [];
+  try {
+    const sockets = await io.in(`workspace:${workspaceId}`).fetchSockets();
+    onlineUsers = sockets
+      .map((s) => s.data?.userId?.toString())
+      .filter(Boolean);
+  } catch (e) {
+    // ignore
+  }
+
+  const results = members.map((m) => ({
+    _id: m.userId._id,
+    name: m.userId.name,
+    avatar: m.userId.avatar,
+    role: m.role,
+    isOnline: onlineUsers.includes(m.userId._id.toString()),
+  }));
+
+  res.status(200).json({
+    status: "success",
+    data: results,
+  });
+});

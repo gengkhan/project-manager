@@ -42,10 +42,11 @@ router.post(
 
 // ── Members ─────────────────────────────────────────────
 router.get(
-  "/:id/members",
+  "/:id/members/search",
   workspaceMember(),
-  workspaceController.listMembers,
+  workspaceController.searchMembers,
 );
+router.get("/:id/members", workspaceMember(), workspaceController.listMembers);
 
 // ── Invite ──────────────────────────────────────────────
 router.post(
@@ -98,4 +99,3 @@ router.post(
 );
 
 module.exports = router;
-

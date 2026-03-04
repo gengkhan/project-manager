@@ -141,11 +141,10 @@ export function isBlockNoteEmpty(content) {
       if (block.type !== "paragraph") return false;
       if (!block.content || block.content.length === 0) return true;
       return block.content.every(
-        (c) => c.type === "text" && (!c.text || c.text.trim() === "")
+        (c) => c.type === "text" && (!c.text || c.text.trim() === ""),
       );
     });
   } catch {
     return !content || (typeof content === "string" && !content.trim());
   }
 }
-

@@ -34,6 +34,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { MentionEditor, MentionReadOnly } from "../mention-editor";
 
 export function CommentItem({
   comment,
@@ -49,9 +50,10 @@ export function CommentItem({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
+  const [editMentions, setEditMentions] = useState(comment.mentions || []);
 
   const handleEdit = () => {
-    onEdit(comment._id, editContent);
+    onEdit(comment._id, editContent, editMentions);
     setIsEditing(false);
   };
 
@@ -189,17 +191,26 @@ export function CommentItem({
 
         {isEditing ? (
           <div className="mt-1">
-            <textarea
-              className="w-full text-xs p-2 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-primary min-h-[60px]"
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-            />
+            <div className="bg-muted/30 rounded-md border min-h-[60px] relative z-10">
+              <MentionEditor
+                workspaceId={comment.workspaceId}
+                initialContent={editContent}
+                onChange={(val) => setEditContent(val)}
+                onMentionsChange={(m) => setEditMentions(m)}
+                minimal={true}
+                className="blocknote-compact px-1 py-1"
+              />
+            </div>
             <div className="flex justify-end gap-2 mt-2">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 text-[10px]"
-                onClick={() => setIsEditing(false)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditContent(comment.content);
+                  setEditMentions(comment.mentions || []);
+                }}
               >
                 Batal
               </Button>
@@ -207,22 +218,30 @@ export function CommentItem({
                 size="sm"
                 className="h-7 text-[10px]"
                 onClick={handleEdit}
+                disabled={!editContent || editContent === "[]"}
               >
                 Simpan
               </Button>
             </div>
           </div>
         ) : (
-          <p
+          <div
             className={cn(
-              "text-xs leading-relaxed whitespace-pre-wrap break-words",
+              "text-xs leading-relaxed whitespace-pre-wrap break-words mt-1",
               comment.isDeleted
                 ? "text-muted-foreground italic"
                 : "text-foreground",
             )}
           >
-            {comment.content}
-          </p>
+            {!comment.isDeleted ? (
+              <MentionReadOnly
+                content={comment.content}
+                className="-ml-12 mt-2"
+              />
+            ) : (
+              comment.content
+            )}
+          </div>
         )}
 
         {/* Reactions */}

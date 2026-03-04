@@ -49,15 +49,15 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-// Lazy-load BlockNote to avoid SSR issues
-const BlockNoteEditor = lazy(() =>
-  import("@/components/blocknote-editor").then((m) => ({
-    default: m.BlockNoteEditor,
+// Lazy-load MentionEditor to avoid SSR issues
+const MentionEditor = lazy(() =>
+  import("@/components/mention-editor").then((m) => ({
+    default: m.MentionEditor,
   })),
 );
-const BlockNoteReadOnly = lazy(() =>
-  import("@/components/blocknote-editor").then((m) => ({
-    default: m.BlockNoteReadOnly,
+const MentionReadOnly = lazy(() =>
+  import("@/components/mention-editor").then((m) => ({
+    default: m.MentionReadOnly,
   })),
 );
 
@@ -102,17 +102,18 @@ export function EventOverviewTab({
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [title, setTitle] = useState(event.title);
-  const [description, setDescription] = useState(event.description || "");
   const [saving, setSaving] = useState(false);
   const [participantSearch, setParticipantSearch] = useState("");
   const [showParticipantAdd, setShowParticipantAdd] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
+  const descValueRef = useRef(event.description || "");
+  const descTimerRef = useRef(null);
   const titleRef = useRef(null);
 
   // Sync title/desc with event prop
   useEffect(() => {
     setTitle(event.title);
-    setDescription(event.description || "");
+    descValueRef.current = event.description || "";
   }, [event.title, event.description]);
 
   const saveField = useCallback(
@@ -137,12 +138,28 @@ export function EventOverviewTab({
     setEditingTitle(false);
   };
 
-  const handleDescSave = () => {
-    if (description !== event.description) {
-      saveField("description", description);
+  // Description — debounced auto-save
+  const handleDescChange = useCallback(
+    (jsonString) => {
+      descValueRef.current = jsonString;
+      if (descTimerRef.current) clearTimeout(descTimerRef.current);
+      descTimerRef.current = setTimeout(() => {
+        if (descValueRef.current !== event.description) {
+          saveField("description", descValueRef.current);
+        }
+      }, 800);
+    },
+    [event.description, saveField],
+  );
+
+  // Save immediately when leaving edit mode
+  const saveDescAndClose = useCallback(() => {
+    if (descTimerRef.current) clearTimeout(descTimerRef.current);
+    if (descValueRef.current !== event.description) {
+      saveField("description", descValueRef.current);
     }
     setEditingDesc(false);
-  };
+  }, [event.description, saveField]);
 
   const handleAddParticipant = async (userId) => {
     try {
@@ -221,12 +238,24 @@ export function EventOverviewTab({
 
           {/* Description */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-              Deskripsi
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block">
+                Deskripsi
+              </label>
+              {editingDesc && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={saveDescAndClose}
+                >
+                  Selesai
+                </Button>
+              )}
+            </div>
             {editingDesc ? (
               <div className="space-y-2">
-                <div className="py-2 px-6 rounded-md border border-input">
+                <div className="py-2 px-6 rounded-md border border-input focus-within:ring-1 focus-within:ring-ring transition-shadow">
                   <Suspense
                     fallback={
                       <div className="flex items-center justify-center py-6 text-muted-foreground">
@@ -234,32 +263,14 @@ export function EventOverviewTab({
                       </div>
                     }
                   >
-                    <BlockNoteEditor
+                    <MentionEditor
                       key={editorKey}
+                      workspaceId={event.workspaceId}
                       initialContent={event.description || null}
-                      onChange={setDescription}
-                      placeholder="Tulis deskripsi event..."
+                      onChange={handleDescChange}
                       className="blocknote-compact"
                     />
                   </Suspense>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleDescSave} disabled={saving}>
-                    {saving && (
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    )}
-                    Simpan
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setDescription(event.description || "");
-                      setEditingDesc(false);
-                    }}
-                  >
-                    Batal
-                  </Button>
                 </div>
               </div>
             ) : (
@@ -278,7 +289,7 @@ export function EventOverviewTab({
                       </p>
                     }
                   >
-                    <BlockNoteReadOnly content={event.description} />
+                    <MentionReadOnly content={event.description} />
                   </Suspense>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">
