@@ -154,6 +154,7 @@ export default function WorkspaceLayout({ children, params }) {
     useWorkspace();
   const [initialLoading, setInitialLoading] = useState(true);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Load workspace and connect socket
   useEffect(() => {
@@ -219,7 +220,12 @@ export default function WorkspaceLayout({ children, params }) {
         <SidebarInset className="relative">
           <Topbar workspace={currentWorkspace} workspaceId={id} />
           <div className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</div>
-          <BottomNav workspaceId={id} onMoreClick={() => setIsMoreOpen(true)} />
+          {isMobile && (
+            <BottomNav
+              workspaceId={id}
+              onMoreClick={() => setIsMoreOpen(true)}
+            />
+          )}
           <MoreDrawer
             open={isMoreOpen}
             onOpenChange={setIsMoreOpen}
