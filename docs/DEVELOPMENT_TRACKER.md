@@ -411,14 +411,14 @@
 
 ### 5.4 Widget Gambar (Ref: `12-widget-gambar.md`)
 
-- [ ] **Frontend**: Custom React Flow node — ImageWidgetNode
-- [ ] **Frontend**: Upload file (Puter.js, maks 1MB, JPG/PNG/GIF/WebP)
-- [ ] **Frontend**: Embed dari URL
-- [ ] **Frontend**: Drag & drop file ke canvas → auto-create widget
-- [ ] **Frontend**: Caption (editable, maks 500 char)
-- [ ] **Frontend**: Klik gambar → modal preview full-size
-- [ ] **Frontend**: Ganti gambar, download
-- [ ] **Frontend**: Resize dengan aspect ratio terjaga
+- [x] **Frontend**: Custom React Flow node — ImageWidgetNode
+- [x] **Frontend**: Upload file (Puter.js, maks 1MB, JPG/PNG/GIF/WebP)
+- [x] **Frontend**: Embed dari URL
+- [x] **Frontend**: Drag & drop file ke canvas → auto-create widget
+- [x] **Frontend**: Caption (editable, maks 500 char)
+- [x] **Frontend**: Klik gambar → modal preview full-size
+- [x] **Frontend**: Ganti gambar, download
+- [x] **Frontend**: Resize dengan aspect ratio terjaga
 - [ ] **Test**: Test widget gambar
 
 ### 5.5 Widget Teks WYSIWYG (Ref: `13-widget-teks-wysiwyg.md`)

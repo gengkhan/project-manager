@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, useRef } from "react";
 import { Handle, Position, NodeResizer } from "@xyflow/react";
 import {
   DropdownMenu,
@@ -29,9 +29,12 @@ import {
   Image,
   FileText,
   GripVertical,
+  ImagePlus,
+  Download,
 } from "lucide-react";
 import { TaskWidgetNode } from "./task-widget-node";
 import { DiagramWidgetNode } from "./diagram/diagram-widget-node";
+import { ImageWidgetNode } from "./image-widget-node";
 
 const WIDGET_ICONS = {
   task: {
@@ -82,6 +85,9 @@ function WidgetNodeComponent({ id, data, selected }) {
     onLayerChange,
   } = data;
 
+  // Image widget: ref for replace-image file input
+  const imageReplaceRef = useRef(null);
+
   const widgetInfo = WIDGET_ICONS[type] || WIDGET_ICONS.text;
   const Icon = widgetInfo.icon;
 
@@ -119,12 +125,11 @@ function WidgetNodeComponent({ id, data, selected }) {
         );
       case "image":
         return (
-          <div className="p-3 text-xs text-muted-foreground flex items-center justify-center min-h-[80px]">
-            <div className="flex flex-col items-center gap-2">
-              <Image className="h-8 w-8 text-muted-foreground/30" />
-              <p className="italic">Widget Gambar — Fase 5.4</p>
-            </div>
-          </div>
+          <ImageWidgetNode
+            widgetId={id}
+            widgetData={widgetData}
+            onUpdateWidget={(wId, data) => onUpdate?.(wId, data)}
+          />
         );
       case "text":
         return (
@@ -275,6 +280,37 @@ function WidgetNodeComponent({ id, data, selected }) {
                   )}
                   {isLocked ? "Unlock" : "Lock Position"}
                 </DropdownMenuItem>
+
+                {/* Image-specific actions */}
+                {type === "image" && widgetData?.imageUrl && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => imageReplaceRef.current?.click()}
+                    >
+                      <ImagePlus className="h-4 w-4 mr-2" />
+                      Ganti Gambar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (widgetData?.imageUrl) {
+                          const link = document.createElement("a");
+                          link.href = widgetData.imageUrl;
+                          link.download =
+                            widgetData.originalFileName || "image";
+                          link.target = "_blank";
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </DropdownMenuItem>
+                  </>
+                )}
+
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
@@ -285,6 +321,84 @@ function WidgetNodeComponent({ id, data, selected }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Hidden file input for image replace */}
+            {type === "image" && (
+              <input
+                ref={imageReplaceRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const ALLOWED = [
+                      "image/jpeg",
+                      "image/png",
+                      "image/gif",
+                      "image/webp",
+                    ];
+                    if (!ALLOWED.includes(file.type)) {
+                      return;
+                    }
+                    if (file.size > 1024 * 1024) {
+                      return;
+                    }
+                    // Upload via ImgBB API or fallback to base64
+                    const doUpload = async () => {
+                      try {
+                        let url;
+                        const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+                        if (apiKey) {
+                          const base64 = await new Promise(
+                            (resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onload = (ev) =>
+                                resolve(ev.target.result.split(",")[1]);
+                              reader.onerror = reject;
+                              reader.readAsDataURL(file);
+                            },
+                          );
+                          const formData = new FormData();
+                          formData.append("key", apiKey);
+                          formData.append("image", base64);
+                          const resp = await fetch(
+                            "https://api.imgbb.com/1/upload",
+                            { method: "POST", body: formData },
+                          );
+                          const data = await resp.json();
+                          if (data.success) {
+                            url = data.data.url;
+                          } else {
+                            throw new Error("ImgBB upload failed");
+                          }
+                        } else {
+                          url = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => resolve(ev.target.result);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(file);
+                          });
+                        }
+                        onUpdate?.(id, {
+                          data: {
+                            ...widgetData,
+                            imageUrl: url,
+                            imageSource: "upload",
+                            originalFileName: file.name,
+                            title: file.name,
+                          },
+                        });
+                      } catch (err) {
+                        console.error("Replace image error:", err);
+                      }
+                    };
+                    doUpload();
+                  }
+                  if (e.target) e.target.value = "";
+                }}
+              />
+            )}
           </div>
         </div>
 

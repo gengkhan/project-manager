@@ -19,6 +19,15 @@ import { ConnectionEdge } from "./connection-edge";
 import { CanvasToolbar } from "./canvas-toolbar";
 import { toast } from "sonner";
 
+// Image upload constants
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+];
+const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB
+
 // Map handle position to side string
 const positionToSide = {
   top: "top",
@@ -363,12 +372,95 @@ function CanvasInner({
     [onAddWidget, viewport],
   );
 
+  // ── Canvas drag & drop for image files ──────────
+  const handleCanvasDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleCanvasDrop = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (isReadOnly) return;
+
+      const file = e.dataTransfer?.files?.[0];
+      if (!file || !ALLOWED_IMAGE_TYPES.includes(file.type)) return;
+
+      if (file.size > MAX_IMAGE_SIZE) {
+        toast.error("Ukuran file maksimal 1MB");
+        return;
+      }
+
+      // Calculate drop position in flow coordinates
+      const reactFlowBounds = e.currentTarget.getBoundingClientRect();
+      const zoom = getZoom();
+      const x = (e.clientX - reactFlowBounds.left - viewport.x * zoom) / zoom;
+      const y = (e.clientY - reactFlowBounds.top - viewport.y * zoom) / zoom;
+
+      try {
+        let url;
+        const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+        if (apiKey) {
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => resolve(ev.target.result.split(",")[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          const formData = new FormData();
+          formData.append("key", apiKey);
+          formData.append("image", base64);
+          const resp = await fetch("https://api.imgbb.com/1/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await resp.json();
+          if (data.success) {
+            url = data.data.url;
+          } else {
+            throw new Error("ImgBB upload failed");
+          }
+        } else {
+          url = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => resolve(ev.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        }
+
+        onAddWidget?.({
+          type: "image",
+          x: Math.round(x - 175), // Center the 350px widget
+          y: Math.round(y - 50),
+          width: 350,
+          height: 250,
+          data: {
+            imageUrl: url,
+            imageSource: "upload",
+            originalFileName: file.name,
+            title: file.name,
+          },
+        });
+        toast.success("Widget gambar berhasil dibuat");
+      } catch (err) {
+        console.error("Canvas drop upload error:", err);
+        toast.error("Gagal mengupload gambar");
+      }
+    },
+    [onAddWidget, viewport, isReadOnly, getZoom],
+  );
+
   // ── Node & Edge types ───────────────────────────
   const nodeTypes = useMemo(() => ({ widget: WidgetNode }), []);
   const edgeTypes = useMemo(() => ({ connection: ConnectionEdge }), []);
 
   return (
-    <div className="w-full h-full relative">
+    <div
+      className="w-full h-full relative"
+      onDragOver={handleCanvasDragOver}
+      onDrop={handleCanvasDrop}
+    >
       <CanvasToolbar
         onAddWidget={handleAddWidget}
         onZoomIn={() => zoomIn()}
