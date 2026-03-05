@@ -5,6 +5,7 @@ const BrainstormingConnection = require("../models/BrainstormingConnection");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
 const ActivityLogService = require("../services/activityLog.service");
+const NotificationService = require("../services/notification.service");
 
 // Helper: get Socket.io instance (safe)
 function getIO() {
@@ -469,6 +470,12 @@ exports.updateWidget = catchAsync(async (req, res, next) => {
     return next(new AppError("Widget terkunci. Unlock terlebih dahulu.", 400));
   }
 
+  // Capture old mentions before merge (for notification diff)
+  const oldWidgetMentions =
+    data !== undefined && widget.type === "text" && widget.data?.mentions
+      ? [...widget.data.mentions]
+      : [];
+
   // Update allowed fields
   if (x !== undefined) widget.x = x;
   if (y !== undefined) widget.y = y;
@@ -520,6 +527,38 @@ exports.updateWidget = catchAsync(async (req, res, next) => {
       changes,
       widget: updatedWidget,
     });
+  }
+
+  // ── Mention Notifications (for text widgets with @mention) ──
+  if (
+    data !== undefined &&
+    widget.type === "text" &&
+    Array.isArray(data.mentions) &&
+    data.mentions.length > 0
+  ) {
+    try {
+      const oldIds = oldWidgetMentions.map((m) => m.userId?.toString());
+      const newIds = data.mentions.map((m) => m.userId?.toString());
+      const newlyMentioned = newIds.filter((id) => id && !oldIds.includes(id));
+
+      if (newlyMentioned.length > 0) {
+        const boardUrl = `/workspace/${workspace._id}/brainstorming/${boardId}`;
+        const widgetTitle =
+          data.title || updatedWidget?.data?.title || "Catatan";
+        await NotificationService.createForMany({
+          workspaceId: workspace._id,
+          recipientIds: newlyMentioned,
+          actorId: req.user.id,
+          type: "mention",
+          targetType: "board",
+          targetId: boardId,
+          message: `menyebut kamu di Brainstorming widget "${widgetTitle}"`,
+          url: boardUrl,
+        });
+      }
+    } catch (err) {
+      console.error("Widget mention notification error:", err);
+    }
   }
 
   res.status(200).json({

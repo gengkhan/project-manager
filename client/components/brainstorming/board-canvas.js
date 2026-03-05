@@ -361,12 +361,18 @@ function CanvasInner({
       const centerX = (-viewport.x + 400) / zoom;
       const centerY = (-viewport.y + 300) / zoom;
 
+      const widgetSizes = {
+        image: { width: 350, height: 250 },
+        text: { width: 400, height: 300 },
+      };
+      const size = widgetSizes[type] || { width: 300, height: 200 };
+
       onAddWidget?.({
         type,
         x: Math.round(centerX + Math.random() * 100 - 50),
         y: Math.round(centerY + Math.random() * 100 - 50),
-        width: type === "image" ? 350 : 300,
-        height: type === "image" ? 250 : 200,
+        width: size.width,
+        height: size.height,
       });
     },
     [onAddWidget, viewport],

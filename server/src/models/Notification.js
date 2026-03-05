@@ -33,7 +33,7 @@ const notificationSchema = new mongoose.Schema(
     targetType: {
       type: String,
       required: true,
-      enum: ["task", "event", "workspace", "comment"],
+      enum: ["task", "event", "workspace", "comment", "board"],
     },
     targetId: {
       type: mongoose.Schema.Types.ObjectId,

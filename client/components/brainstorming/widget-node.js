@@ -35,6 +35,7 @@ import {
 import { TaskWidgetNode } from "./task-widget-node";
 import { DiagramWidgetNode } from "./diagram/diagram-widget-node";
 import { ImageWidgetNode } from "./image-widget-node";
+import { TextWidgetNode } from "./text-widget-node";
 
 const WIDGET_ICONS = {
   task: {
@@ -133,11 +134,11 @@ function WidgetNodeComponent({ id, data, selected }) {
         );
       case "text":
         return (
-          <div className="p-3 text-xs text-muted-foreground">
-            <p className="italic">
-              Widget Teks WYSIWYG — konten akan diimplementasikan di Fase 5.5
-            </p>
-          </div>
+          <TextWidgetNode
+            widgetId={id}
+            widgetData={widgetData}
+            onUpdateWidget={(wId, data) => onUpdate?.(wId, data)}
+          />
         );
       default:
         return null;

@@ -423,13 +423,13 @@
 
 ### 5.5 Widget Teks WYSIWYG (Ref: `13-widget-teks-wysiwyg.md`)
 
-- [ ] **Frontend**: Custom React Flow node — TextWidgetNode
-- [ ] **Frontend**: Integrasi BlockNote.js di dalam widget
-- [ ] **Frontend**: Slash menu (heading, paragraph, list, table)
-- [ ] **Frontend**: Formatting toolbar (bold, italic, underline, highlight)
-- [ ] **Frontend**: Drag & drop blocks
-- [ ] **Frontend**: @mention (custom suggestion menu → notifikasi)
-- [ ] **Frontend**: Tabel sederhana (insert, tambah/hapus row/col)
+- [x] **Frontend**: Custom React Flow node — TextWidgetNode
+- [x] **Frontend**: Integrasi BlockNote.js di dalam widget
+- [x] **Frontend**: Slash menu (heading, paragraph, list, table)
+- [x] **Frontend**: Formatting toolbar (bold, italic, underline, highlight)
+- [x] **Frontend**: Drag & drop blocks
+- [x] **Frontend**: @mention (custom suggestion menu → notifikasi)
+- [x] **Frontend**: Tabel sederhana (insert, tambah/hapus row/col)
 - [ ] **Frontend**: Kolaborasi real-time (Yjs)
 - [ ] **Test**: Test widget teks
 
