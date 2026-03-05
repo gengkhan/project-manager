@@ -46,10 +46,8 @@ export default function CalendarPage({ params }) {
   useEffect(() => {
     if (isMobile) {
       setCurrentView("timeGridDay");
-      calendarViewRef.current?.changeView("timeGridDay");
     } else {
       setCurrentView("dayGridMonth");
-      calendarViewRef.current?.changeView("dayGridMonth");
     }
   }, [isMobile]);
 
