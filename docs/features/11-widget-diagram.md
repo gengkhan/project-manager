@@ -157,7 +157,9 @@ Semua koneksi bersifat freeform — bisa dibuat dari node mana pun ke node mana 
       "size": "string (small|medium|large)",
       "color": "string (hex)",
       "borderStyle": "string (solid|dashed|none)",
-      "icon": "string (lucide icon name, nullable)"
+      "icon": "string (lucide icon name, nullable)",
+      "width": "number (optional, custom width when resized)",
+      "height": "number (optional, custom height when resized)"
     }
   ],
   "edges": [

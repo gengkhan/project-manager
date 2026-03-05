@@ -12,12 +12,7 @@ export function DiagramWidgetNode({ widgetId, widgetData, onUpdateWidget }) {
 
   return (
     <>
-      <div
-        className="w-full h-full relative overflow-hidden bg-background group"
-        onPointerDownCapture={(e) => e.stopPropagation()}
-        onWheelCapture={(e) => e.stopPropagation()}
-        onMouseDownCapture={(e) => e.stopPropagation()}
-      >
+      <div className="w-full h-full relative overflow-hidden bg-background group nodrag nowheel">
         {/* Read-only preview */}
         <ReactFlowProvider>
           <DiagramInner
@@ -43,6 +38,7 @@ export function DiagramWidgetNode({ widgetId, widgetData, onUpdateWidget }) {
       <DiagramFullscreenModal
         isOpen={isFullscreen}
         onClose={() => setIsFullscreen(false)}
+        onToggleFullscreen={() => setIsFullscreen((prev) => !prev)}
         widgetId={widgetId}
         widgetData={widgetData}
         onUpdateWidget={(wId, data) => {

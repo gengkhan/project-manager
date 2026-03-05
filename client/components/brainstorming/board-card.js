@@ -88,7 +88,7 @@ export function BoardCard({ board, onClick, onRename, onDuplicate, onDelete }) {
 
       <CardContent className="p-3.5">
         <h3 className="text-sm font-semibold truncate mb-1.5">{board.name}</h3>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex flex-col text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <LayoutGrid className="h-3 w-3" />
@@ -101,7 +101,7 @@ export function BoardCard({ board, onClick, onRename, onDuplicate, onDelete }) {
               </span>
             )}
           </div>
-          <span>{timeAgo}</span>
+          <span className="ml-auto mt-2">{timeAgo}</span>
         </div>
       </CardContent>
     </Card>

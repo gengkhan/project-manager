@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   useNodesState,
@@ -43,27 +43,42 @@ export function DiagramInner({
   onToggleFullscreen,
   isPreview = false,
 }) {
-  const { fitView, screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition, zoomIn, zoomOut, getZoom } =
+    useReactFlow();
 
   // ── Parse initial data ─────────────────────────────
   const initialNodes = useMemo(() => {
     if (!initialData?.nodes || initialData.nodes.length === 0) {
       return [];
     }
-    return initialData.nodes.map((n) => ({
-      id: n._id,
-      type: "diagramNode",
-      position: { x: n.x, y: n.y },
-      data: {
-        text: n.text,
-        shape: n.shape || "rectangle",
-        size: n.size || "medium",
-        color: n.color || "#ffffff",
-        borderStyle: n.borderStyle || "solid",
-        icon: n.icon || null,
-        isPreview,
-      },
-    }));
+    return initialData.nodes.map((n) => {
+      const size = n.size || "medium";
+      const dims =
+        size === "small"
+          ? { width: 120, height: 50 }
+          : size === "large"
+            ? { width: 220, height: 85 }
+            : { width: 170, height: 60 };
+      const width = n.width ?? dims.width;
+      const height = n.height ?? dims.height;
+      return {
+        id: n._id,
+        type: "diagramNode",
+        position: { x: n.x, y: n.y },
+        style: { width, height },
+        data: {
+          text: n.text,
+          shape: n.shape || "rectangle",
+          size: n.size || "medium",
+          color: n.color || "#ffffff",
+          borderStyle: n.borderStyle || "solid",
+          icon: n.icon || null,
+          width,
+          height,
+          isPreview,
+        },
+      };
+    });
   }, [initialData?.nodes, isPreview]);
 
   const initialEdges = useMemo(() => {
@@ -135,6 +150,29 @@ export function DiagramInner({
   const [menu, setMenu] = useState(null);
   const [edgeMenu, setEdgeMenu] = useState(null);
 
+  useEffect(() => {
+    if (isPreview) {
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+    }
+  }, [isPreview, initialNodes, initialEdges, setNodes, setEdges]);
+
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (isPreview) return; // Allow bubbling to outer react-flow if preview mode
+    const el = containerRef.current;
+    if (!el) return;
+    const stopBubble = (e) => e.stopPropagation();
+    // React flow handles its native events, but to block Radix Dialog we must stop native propagation here.
+    el.addEventListener("wheel", stopBubble);
+    el.addEventListener("pointerdown", stopBubble);
+    return () => {
+      el.removeEventListener("wheel", stopBubble);
+      el.removeEventListener("pointerdown", stopBubble);
+    };
+  }, [isPreview]);
+
   // ── Debounced API sync ─────────────────────────────
   const saveTimeoutRef = useRef(null);
 
@@ -154,6 +192,8 @@ export function DiagramInner({
           color: n.data.color,
           borderStyle: n.data.borderStyle,
           icon: n.data.icon,
+          width: n.data.width ?? n.style?.width,
+          height: n.data.height ?? n.style?.height,
         }));
 
         const apiEdges = currentEdges.map((e) => ({
@@ -205,13 +245,72 @@ export function DiagramInner({
     [edges, handleEdgeLabelChange],
   );
 
+  const handleNodeResize = useCallback(
+    (nodeId, { width, height }) => {
+      setNodes((nds) => {
+        const result = nds.map((n) => {
+          if (n.id !== nodeId) return n;
+          return {
+            ...n,
+            style: { ...n.style, width, height },
+            data: { ...n.data, width, height },
+          };
+        });
+        if (!isPreview) syncToApi(result, edges);
+        return result;
+      });
+    },
+    [setNodes, edges, syncToApi, isPreview],
+  );
+
+  const handleTextChange = useCallback(
+    (nodeId, newText) => {
+      setNodes((nds) => {
+        const result = nds.map((n) => {
+          if (n.id !== nodeId) return n;
+          return {
+            ...n,
+            data: { ...n.data, text: newText },
+          };
+        });
+        if (!isPreview) syncToApi(result, edges);
+        return result;
+      });
+    },
+    [setNodes, edges, syncToApi, isPreview],
+  );
+
+  // Inject node resize handler and ensure style has dimensions
+  const nodesWithHandlers = useMemo(
+    () =>
+      nodes.map((n) => ({
+        ...n,
+        style: {
+          ...n.style,
+          width: n.style?.width ?? n.data?.width ?? 170,
+          height: n.style?.height ?? n.data?.height ?? 60,
+        },
+        data: {
+          ...n.data,
+          onNodeResize: handleNodeResize,
+          onTextChange: handleTextChange,
+          width: n.data?.width ?? n.style?.width ?? 170,
+          height: n.data?.height ?? n.style?.height ?? 60,
+        },
+      })),
+    [nodes, handleNodeResize, handleTextChange],
+  );
+
   // ── Node/Edge change handlers ─────────────────────
   const onNodesChange = useCallback(
     (changes) => {
       setNodes((nds) => {
         const result = applyNodeChanges(changes, nds);
         const isSignificantChange = changes.some(
-          (c) => c.type === "position" || c.type === "remove",
+          (c) =>
+            c.type === "position" ||
+            c.type === "remove" ||
+            c.type === "dimensions",
         );
         if (isSignificantChange && !isPreview) syncToApi(result, edges);
         return result;
@@ -298,18 +397,23 @@ export function DiagramInner({
       } else if (shapeType === "sticky-note") {
         newColor = "#fef08a";
         newText = "Note";
+        newBorderStyle = "none";
       }
 
+      const dims = { width: 170, height: 60 };
       const newNode = {
         id: newNodeId,
         type: "diagramNode",
         position: centerPos,
+        style: dims,
         data: {
           ...DEFAULT_NODE_STYLES,
           text: newText,
           shape: newShape,
           borderStyle: newBorderStyle,
           color: newColor,
+          width: dims.width,
+          height: dims.height,
         },
         selected: true,
       };
@@ -433,6 +537,10 @@ export function DiagramInner({
       if (!sourceNode) return;
 
       const newNodeId = generateId();
+      const dims = {
+        width: sourceNode.style?.width ?? sourceNode.data?.width ?? 170,
+        height: sourceNode.style?.height ?? sourceNode.data?.height ?? 60,
+      };
       const newNode = {
         id: newNodeId,
         type: "diagramNode",
@@ -440,7 +548,8 @@ export function DiagramInner({
           x: sourceNode.position.x + 30,
           y: sourceNode.position.y + 30,
         },
-        data: { ...sourceNode.data },
+        style: dims,
+        data: { ...sourceNode.data, width: dims.width, height: dims.height },
         selected: true,
       };
 
@@ -470,6 +579,10 @@ export function DiagramInner({
   // ── Keyboard shortcuts ─────────────────────────────
   const handleKeyDown = useCallback(
     (e) => {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.stopPropagation();
+      }
+
       const selectedNodes = nodes.filter((n) => n.selected);
       if (selectedNodes.length === 0) return;
 
@@ -526,9 +639,8 @@ export function DiagramInner({
 
   return (
     <div
+      ref={containerRef}
       className="w-full h-full relative focus:outline-none"
-      onWheelCapture={stopPropagation}
-      onPointerDownCapture={stopPropagation}
       onKeyDown={handleKeyDown}
       tabIndex={0}
       onClick={() => {
@@ -541,6 +653,10 @@ export function DiagramInner({
         onExport={onExport}
         onFullscreen={onToggleFullscreen}
         isFullscreen={isFullscreen}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onFitView={() => fitView({ padding: 0.2 })}
+        zoom={getZoom?.() ?? 1}
       />
 
       {!isPreview && isFullscreen && (
@@ -687,7 +803,7 @@ export function DiagramInner({
       )}
 
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithHandlers}
         edges={edgesWithHandler}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -702,9 +818,13 @@ export function DiagramInner({
         defaultEdgeOptions={{ type: "diagramEdge" }}
         fitView
         minZoom={0.2}
-        panOnScroll={true}
-        zoomOnScroll={true}
-        panOnDrag={true}
+        panOnScroll={!isPreview}
+        zoomOnScroll={!isPreview}
+        panOnDrag={!isPreview}
+        zoomOnPinch={!isPreview}
+        nodesDraggable={!isPreview}
+        nodesConnectable={!isPreview}
+        elementsSelectable={!isPreview}
         connectionMode="loose"
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
