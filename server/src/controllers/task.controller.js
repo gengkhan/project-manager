@@ -397,15 +397,26 @@ exports.updateTask = catchAsync(async (req, res, next) => {
     task.assignees = assignees;
   }
 
-  // Dates
-  if (startDate !== undefined) task.startDate = startDate || null;
-  if (dueDate !== undefined) task.dueDate = dueDate || null;
+  // Dates (track changes for notification)
+  if (startDate !== undefined) {
+    const oldDate = task.startDate ? new Date(task.startDate).getTime() : null;
+    const newDate = startDate ? new Date(startDate).getTime() : null;
+    if (oldDate !== newDate) datesChanged = true;
+    task.startDate = startDate || null;
+  }
+  if (dueDate !== undefined) {
+    const oldDate = task.dueDate ? new Date(task.dueDate).getTime() : null;
+    const newDate = dueDate ? new Date(dueDate).getTime() : null;
+    if (oldDate !== newDate) datesChanged = true;
+    task.dueDate = dueDate || null;
+  }
 
-  // Priority
+  // Priority (track changes for notification)
   if (priority !== undefined) {
     if (!["low", "medium", "high", "critical"].includes(priority)) {
       return next(new AppError("Prioritas tidak valid", 400));
     }
+    if (task.priority !== priority) priorityChanged = true;
     task.priority = priority;
   }
 
@@ -484,7 +495,7 @@ exports.updateTask = catchAsync(async (req, res, next) => {
     }),
   });
 
-  // Activity log — determine what changed
+  // Activity Log
   if (columnChanged) {
     const newColName =
       workspace.kanbanColumns?.find(
@@ -505,7 +516,6 @@ exports.updateTask = catchAsync(async (req, res, next) => {
     if (title !== undefined && title !== task.title) changes.push("title");
     if (description !== undefined && description !== oldDescription)
       changes.push("description");
-    if (columnChanged) changes.push("status");
     if (assignees !== undefined) changes.push("assignees");
     if (datesChanged) changes.push("dates");
     if (priorityChanged) changes.push("priority");
@@ -514,7 +524,7 @@ exports.updateTask = catchAsync(async (req, res, next) => {
       ActivityLogService.log({
         workspaceId: workspace._id,
         actorId: userId,
-        action: columnChanged ? "task.moved" : "task.updated",
+        action: "task.updated",
         targetType: "task",
         targetId: task._id,
         targetName: task.title,
@@ -522,96 +532,96 @@ exports.updateTask = catchAsync(async (req, res, next) => {
           changes.length === 1 ? { field: changes[0] } : { fields: changes },
       });
     }
+  }
 
-    // ── Trigger Notifications ──
-    const taskUrl = `/workspace/${workspace._id}/tasks/${task._id}`;
+  // ── Trigger Notifications ──
+  const taskUrl = `/workspace/${workspace._id}/tasks/${task._id}`;
 
-    // 1. Assign Task Notification (new assignees only)
-    if (assignees !== undefined) {
-      const newAssignees = assignees.filter(
-        (a) => !oldAssignees.includes(a.toString()),
+  // 1. Assign Task Notification (new assignees only)
+  if (assignees !== undefined) {
+    const newAssignees = assignees.filter(
+      (a) => !oldAssignees.includes(a.toString()),
+    );
+    if (newAssignees.length > 0) {
+      await NotificationService.createForMany({
+        workspaceId: workspace._id,
+        recipientIds: newAssignees,
+        actorId: userId,
+        type: "assign_task",
+        targetType: "task",
+        targetId: task._id,
+        message: `Ditugaskan ke kamu: ${task.title}`,
+        url: taskUrl,
+      });
+    }
+  }
+
+  // 2. Mention Notification (from new description)
+  if (description !== undefined && description !== oldDescription) {
+    try {
+      const newDescObj = JSON.parse(description);
+      const oldDescObj = oldDescription
+        ? JSON.parse(oldDescription)
+        : { mentions: [] };
+
+      const newMentions = Array.isArray(newDescObj.mentions)
+        ? newDescObj.mentions.map((m) => m.userId.toString())
+        : [];
+      const oldMentions = Array.isArray(oldDescObj.mentions)
+        ? oldDescObj.mentions.map((m) => m.userId.toString())
+        : [];
+
+      const newlyMentionedUserIds = newMentions.filter(
+        (id) => !oldMentions.includes(id),
       );
-      if (newAssignees.length > 0) {
+
+      if (newlyMentionedUserIds.length > 0) {
         await NotificationService.createForMany({
           workspaceId: workspace._id,
-          recipientIds: newAssignees,
+          recipientIds: newlyMentionedUserIds,
           actorId: userId,
-          type: "assign_task",
+          type: "mention",
           targetType: "task",
           targetId: task._id,
-          message: `Ditugaskan ke kamu: ${task.title}`,
+          message: `menyebut kamu di deskripsi task "${task.title}"`,
           url: taskUrl,
         });
       }
+    } catch (err) {
+      // Ignore JSON parse errors
     }
+  }
 
-    // 2. Mention Notification (from new description)
-    if (description !== undefined && description !== oldDescription) {
-      try {
-        const newDescObj = JSON.parse(description);
-        const oldDescObj = oldDescription
-          ? JSON.parse(oldDescription)
-          : { mentions: [] };
+  // 3. Task Update Notification (if moved or important fields changed)
+  const isImportantUpdate = columnChanged || priorityChanged || datesChanged;
+  if (isImportantUpdate) {
+    // Notify all assignees and watchers except the actor
+    const allWatchersAndAssignees = new Set([
+      ...task.assignees.map((id) => id.toString()),
+      ...task.watchers.map((id) => id.toString()),
+    ]);
 
-        const newMentions = Array.isArray(newDescObj.mentions)
-          ? newDescObj.mentions.map((m) => m.userId.toString())
-          : [];
-        const oldMentions = Array.isArray(oldDescObj.mentions)
-          ? oldDescObj.mentions.map((m) => m.userId.toString())
-          : [];
+    // Remove actor from recipients inside set
+    allWatchersAndAssignees.delete(userId.toString());
 
-        const newlyMentionedUserIds = newMentions.filter(
-          (id) => !oldMentions.includes(id),
-        );
+    if (allWatchersAndAssignees.size > 0) {
+      let updateMsg = `Tugas diperbarui: ${task.title}`;
+      if (columnChanged) updateMsg = `Status tugas diubah: ${task.title}`;
+      else if (priorityChanged)
+        updateMsg = `Prioritas tugas diubah: ${task.title}`;
+      else if (datesChanged)
+        updateMsg = `Tenggat waktu tugas diubah: ${task.title}`;
 
-        if (newlyMentionedUserIds.length > 0) {
-          await NotificationService.createForMany({
-            workspaceId: workspace._id,
-            recipientIds: newlyMentionedUserIds,
-            actorId: userId,
-            type: "mention",
-            targetType: "task",
-            targetId: task._id,
-            message: `menyebut kamu di deskripsi task "${task.title}"`,
-            url: taskUrl,
-          });
-        }
-      } catch (err) {
-        // Ignore JSON parse errors
-      }
-    }
-
-    // 3. Task Update Notification (if moved or important fields changed)
-    const isImportantUpdate = columnChanged || priorityChanged || datesChanged;
-    if (isImportantUpdate) {
-      // Notify all assignees and watchers except the actor
-      const allWatchersAndAssignees = new Set([
-        ...task.assignees.map((id) => id.toString()),
-        ...task.watchers.map((id) => id.toString()),
-      ]);
-
-      // Remove actor from recipients inside set
-      allWatchersAndAssignees.delete(userId.toString());
-
-      if (allWatchersAndAssignees.size > 0) {
-        let updateMsg = `Tugas diperbarui: ${task.title}`;
-        if (columnChanged) updateMsg = `Status tugas diubah: ${task.title}`;
-        else if (priorityChanged)
-          updateMsg = `Prioritas tugas diubah: ${task.title}`;
-        else if (datesChanged)
-          updateMsg = `Tenggat waktu tugas diubah: ${task.title}`;
-
-        await NotificationService.createForMany({
-          workspaceId: workspace._id,
-          recipientIds: Array.from(allWatchersAndAssignees),
-          actorId: userId,
-          type: "task_update",
-          targetType: "task",
-          targetId: task._id,
-          message: updateMsg,
-          url: taskUrl,
-        });
-      }
+      await NotificationService.createForMany({
+        workspaceId: workspace._id,
+        recipientIds: Array.from(allWatchersAndAssignees),
+        actorId: userId,
+        type: "task_update",
+        targetType: "task",
+        targetId: task._id,
+        message: updateMsg,
+        url: taskUrl,
+      });
     }
   }
 

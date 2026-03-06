@@ -241,7 +241,28 @@ exports.createEvent = catchAsync(async (req, res, next) => {
   });
 
   // ── Trigger Notifications ──
-  // 1. Mention Notification (from description)
+  const eventUrl = `/workspace/${workspace._id}/events/${event._id}`;
+
+  // 1. Participant Notification (for all participants except creator)
+  if (participants && participants.length > 0) {
+    const participantIds = participants.filter(
+      (id) => id.toString() !== userId,
+    );
+    if (participantIds.length > 0) {
+      await NotificationService.createForMany({
+        workspaceId: workspace._id,
+        recipientIds: participantIds,
+        actorId: userId,
+        type: "assign_task", // Reusing 'assign_task' or could ideally use 'event_invite'
+        targetType: "event",
+        targetId: event._id,
+        message: `Kamu diundang ke event: ${event.title}`,
+        url: eventUrl,
+      });
+    }
+  }
+
+  // 2. Mention Notification (from description)
   if (description) {
     try {
       const descObj = JSON.parse(description);
@@ -259,7 +280,7 @@ exports.createEvent = catchAsync(async (req, res, next) => {
           targetType: "event",
           targetId: event._id,
           message: `menyebut kamu di deskripsi event "${event.title}"`,
-          url: `/workspace/${workspace._id}/events/${event._id}`,
+          url: eventUrl,
         });
       }
     } catch (err) {
@@ -578,6 +599,20 @@ exports.addParticipant = catchAsync(async (req, res, next) => {
     details: { newValue: participantUser?.name || participantId },
   });
 
+  // ── Trigger Notification ──
+  if (participantId !== userId) {
+    await NotificationService.create({
+      workspaceId: workspace._id,
+      recipientId: participantId,
+      actorId: userId,
+      type: "assign_task",
+      targetType: "event",
+      targetId: event._id,
+      message: `Menambahkan kamu ke event: ${event.title}`,
+      url: `/workspace/${workspace._id}/events/${event._id}`,
+    });
+  }
+
   res.status(200).json({
     status: "success",
     data: { event: populatedEvent },
@@ -633,6 +668,20 @@ exports.removeParticipant = catchAsync(async (req, res, next) => {
     targetId: event._id,
     targetName: event.title,
   });
+
+  // ── Trigger Notification ──
+  if (targetUserId !== userId) {
+    await NotificationService.create({
+      workspaceId: workspace._id,
+      recipientId: targetUserId,
+      actorId: userId,
+      type: "assign_task",
+      targetType: "event",
+      targetId: event._id,
+      message: `Mengeluarkan kamu dari event: ${event.title}`,
+      url: `/workspace/${workspace._id}/events/${event._id}`,
+    });
+  }
 
   res.status(200).json({
     status: "success",
