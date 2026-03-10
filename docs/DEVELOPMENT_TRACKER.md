@@ -180,8 +180,8 @@
 - [x] **API**: `GET /api/workspaces/:id/events/:eventId` — Detail event
 - [x] **API**: `PUT /api/workspaces/:id/events/:eventId` — Update event
 - [x] **API**: `DELETE /api/workspaces/:id/events/:eventId` — Hapus (soft)
-- [x] **API**: `POST /api/workspaces/:id/events/:eventId/participants` — Tambah peserta
-- [x] **API**: `DELETE /api/workspaces/:id/events/:eventId/participants/:userId` — Hapus peserta
+- [x] ~~**API**: `POST /api/workspaces/:id/events/:eventId/participants` — Tambah peserta~~ (diganti oleh Division, lihat 2.6)
+- [x] ~~**API**: `DELETE /api/workspaces/:id/events/:eventId/participants/:userId` — Hapus peserta~~ (diganti oleh Division, lihat 2.6)
 - [x] **API**: `GET /api/workspaces/:id/events/:eventId/tasks` — Task terkait
 - [x] **Socket.io**: Event events (created, updated, deleted, participant changes)
 - [x] **Frontend**: Halaman Daftar Event (`/workspace/:id/events`)
@@ -212,6 +212,34 @@
 - [x] **Frontend**: MentionEditor integrasi (BlockNote + @mention)
 - [x] **Frontend**: MentionReadOnly untuk tampilan baca
 - [ ] **Test**: Unit test event notes API
+
+### 2.6 Event Divisions / Divisi Event (Ref: `25-event-divisions.md`)
+
+- [x] **Model**: Buat schema `event_divisions`
+- [x] **API**: `GET /api/workspaces/:id/events/:eventId/divisions` — Daftar divisi
+- [x] **API**: `POST /api/workspaces/:id/events/:eventId/divisions` — Buat divisi
+- [x] **API**: `PUT /api/workspaces/:id/events/:eventId/divisions/:divisionId` — Update divisi
+- [x] **API**: `DELETE /api/workspaces/:id/events/:eventId/divisions/:divisionId` — Hapus divisi (soft)
+- [x] **API**: `POST /api/.../divisions/:divisionId/members` — Tambah anggota ke divisi
+- [x] **API**: `PUT /api/.../divisions/:divisionId/members/:userId` — Update role anggota
+- [x] **API**: `DELETE /api/.../divisions/:divisionId/members/:userId` — Hapus anggota dari divisi
+- [x] **API**: `POST /api/.../divisions/:divisionId/members/:userId/move` — Pindah anggota antar divisi
+- [x] **Socket.io**: Division events (created, updated, deleted, member added/removed/updated/moved)
+- [x] **Integrasi**: Auto-sync `event.participants` dari seluruh anggota divisi
+- [x] **Integrasi**: NotificationService (tambah/hapus anggota)
+- [x] **Integrasi**: ActivityLogService (semua operasi divisi)
+- [x] **Integrasi**: EmbeddingService — RAG indexing (`division` source type)
+- [x] **Integrasi**: Embedding model enum diperbarui (`division`, `event_note`)
+- [x] **Integrasi**: RAG service typeLabels diperbarui (`division`, `event_note`)
+- [x] **Frontend**: Hook `useEventDivisions` (CRUD divisi + member + real-time Socket.io sync)
+- [x] **Frontend**: Komponen `EventDivisionsSection` (collapsible cards, create, edit, delete, member management)
+- [x] **Frontend**: Integrasi di tab Overview detail event (menggantikan card "Peserta")
+- [x] **Frontend**: Dialog pindah anggota antar divisi
+- [x] **Frontend**: Role toggle (leader/member) dengan ikon Crown
+- [x] **Frontend**: Hapus participant selector dari CreateEventDialog
+- [x] **Frontend**: Hapus addParticipant/removeParticipant dari useEvents hook
+- [ ] **Test**: Unit test division API
+- [ ] **Test**: E2E test division UI
 
 ---
 

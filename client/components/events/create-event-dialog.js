@@ -34,14 +34,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   CalendarIcon,
   Loader2,
-  X,
   Palette,
-  Users,
   Check,
   AlignLeft,
 } from "lucide-react";
@@ -64,7 +60,6 @@ export function CreateEventDialog({
   open,
   onOpenChange,
   onCreate,
-  members = [],
 }) {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -78,8 +73,6 @@ export function CreateEventDialog({
     EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.length)],
   );
   const [status, setStatus] = useState("upcoming");
-  const [selectedParticipants, setSelectedParticipants] = useState([]);
-  const [participantSearch, setParticipantSearch] = useState("");
 
   // Reset form on open
   useEffect(() => {
@@ -90,25 +83,10 @@ export function CreateEventDialog({
       setEndDate(null);
       setColor(EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.length)]);
       setStatus("upcoming");
-      setSelectedParticipants([]);
-      setParticipantSearch("");
       setErrors({});
       setEditorKey((k) => k + 1);
     }
   }, [open]);
-
-  // Filtered members for autocomplete
-  const filteredMembers = members.filter((m) => {
-    const userId = typeof m.userId === "object" ? m.userId?._id : m.userId;
-    const userName = typeof m.userId === "object" ? m.userId?.name : m.name;
-    const userEmail = typeof m.userId === "object" ? m.userId?.email : m.email;
-
-    return (
-      !selectedParticipants.some((sp) => sp._id === userId) &&
-      (userName?.toLowerCase().includes(participantSearch.toLowerCase()) ||
-        userEmail?.toLowerCase().includes(participantSearch.toLowerCase()))
-    );
-  });
 
   const validate = () => {
     const newErrors = {};
@@ -135,7 +113,6 @@ export function CreateEventDialog({
         endDate: endDate.toISOString(),
         color,
         status,
-        participants: selectedParticipants.map((p) => p._id),
       });
       onOpenChange(false);
     } catch (err) {
@@ -145,30 +122,6 @@ export function CreateEventDialog({
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleParticipant = (member) => {
-    const userId =
-      typeof member.userId === "object" ? member.userId?._id : member.userId;
-    const userName =
-      typeof member.userId === "object" ? member.userId?.name : member.name;
-    const userEmail =
-      typeof member.userId === "object" ? member.userId?.email : member.email;
-    const userAvatar =
-      typeof member.userId === "object" ? member.userId?.avatar : member.avatar;
-
-    if (!userId) return;
-
-    const exists = selectedParticipants.some((p) => p._id === userId);
-    if (exists) {
-      setSelectedParticipants((prev) => prev.filter((p) => p._id !== userId));
-    } else {
-      setSelectedParticipants((prev) => [
-        ...prev,
-        { _id: userId, name: userName, email: userEmail, avatar: userAvatar },
-      ]);
-    }
-    setParticipantSearch("");
   };
 
   return (
@@ -372,101 +325,6 @@ export function CreateEventDialog({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* Participants */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              Peserta
-            </Label>
-
-            {/* Selected participants */}
-            {selectedParticipants.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {selectedParticipants.map((p) => (
-                  <Badge
-                    key={p._id}
-                    variant="secondary"
-                    className="gap-1 pr-1 h-7"
-                  >
-                    <Avatar className="h-4 w-4">
-                      <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
-                        {p.name?.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs max-w-[100px] truncate">
-                      {p.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedParticipants((prev) =>
-                          prev.filter((sp) => sp._id !== p._id),
-                        )
-                      }
-                      className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* Search input */}
-            <Input
-              placeholder="Cari member untuk ditambahkan..."
-              value={participantSearch}
-              onChange={(e) => setParticipantSearch(e.target.value)}
-              className="h-9"
-            />
-
-            {/* Member dropdown */}
-            {participantSearch && filteredMembers.length > 0 && (
-              <div className="border rounded-lg max-h-36 overflow-y-auto bg-popover shadow-sm">
-                {filteredMembers.slice(0, 8).map((m) => (
-                  <button
-                    key={
-                      typeof m.userId === "object" ? m.userId?._id : m.userId
-                    }
-                    type="button"
-                    onClick={() => toggleParticipant(m)}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-accent transition-colors text-sm"
-                  >
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                        {(typeof m.userId === "object"
-                          ? m.userId?.name
-                          : m.name
-                        )
-                          ?.charAt(0)
-                          .toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate text-sm">
-                        {typeof m.userId === "object" ? m.userId?.name : m.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {typeof m.userId === "object"
-                          ? m.userId?.email
-                          : m.email}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0">
-                      {m.role}
-                    </Badge>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {participantSearch && filteredMembers.length === 0 && (
-              <p className="text-xs text-muted-foreground py-2 text-center">
-                Tidak ada member ditemukan
-              </p>
-            )}
           </div>
 
           {/* Submit Error */}

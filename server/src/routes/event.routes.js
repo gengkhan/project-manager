@@ -28,18 +28,6 @@ router.delete(
   eventController.deleteEvent,
 );
 
-// ── Participants ────────────────────────────────────
-router.post(
-  "/:eventId/participants",
-  workspaceMember("owner", "admin", "member"),
-  eventController.addParticipant,
-);
-router.delete(
-  "/:eventId/participants/:userId",
-  workspaceMember("owner", "admin", "member"),
-  eventController.removeParticipant,
-);
-
 // ── Event Tasks ─────────────────────────────────────
 router.get("/:eventId/tasks", workspaceMember(), eventController.getEventTasks);
 

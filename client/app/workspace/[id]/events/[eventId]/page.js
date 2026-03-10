@@ -72,8 +72,6 @@ export default function EventDetailPage({ params }) {
     getEvent,
     updateEvent,
     deleteEvent,
-    addParticipant,
-    removeParticipant,
   } = useEvents(id);
 
   const [event, setEvent] = useState(null);
@@ -113,26 +111,6 @@ export default function EventDetailPage({ params }) {
       return updatedEvent;
     },
     [eventId, updateEvent],
-  );
-
-  // Handler: add participant
-  const handleAddParticipant = useCallback(
-    async (participantId) => {
-      const updatedEvent = await addParticipant(eventId, participantId);
-      setEvent(updatedEvent);
-      return updatedEvent;
-    },
-    [eventId, addParticipant],
-  );
-
-  // Handler: remove participant
-  const handleRemoveParticipant = useCallback(
-    async (participantId) => {
-      const updatedEvent = await removeParticipant(eventId, participantId);
-      setEvent(updatedEvent);
-      return updatedEvent;
-    },
-    [eventId, removeParticipant],
   );
 
   // Handler: delete event
@@ -308,9 +286,8 @@ export default function EventDetailPage({ params }) {
           <EventOverviewTab
             event={event}
             onUpdate={handleUpdate}
-            onAddParticipant={handleAddParticipant}
-            onRemoveParticipant={handleRemoveParticipant}
             members={members}
+            workspaceId={id}
           />
         </TabsContent>
 

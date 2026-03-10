@@ -105,30 +105,14 @@ export function useEvents(workspaceId) {
       setEvents((prev) => prev.filter((e) => e._id !== eventId));
     };
 
-    const handleParticipantAdded = ({ event: updatedEvent }) => {
-      setEvents((prev) =>
-        prev.map((e) => (e._id === updatedEvent._id ? updatedEvent : e)),
-      );
-    };
-
-    const handleParticipantRemoved = ({ event: updatedEvent }) => {
-      setEvents((prev) =>
-        prev.map((e) => (e._id === updatedEvent._id ? updatedEvent : e)),
-      );
-    };
-
     socket.on("event:created", handleCreated);
     socket.on("event:updated", handleUpdated);
     socket.on("event:deleted", handleDeleted);
-    socket.on("event:participant:added", handleParticipantAdded);
-    socket.on("event:participant:removed", handleParticipantRemoved);
 
     return () => {
       socket.off("event:created", handleCreated);
       socket.off("event:updated", handleUpdated);
       socket.off("event:deleted", handleDeleted);
-      socket.off("event:participant:added", handleParticipantAdded);
-      socket.off("event:participant:removed", handleParticipantRemoved);
     };
   }, []);
 
@@ -173,29 +157,6 @@ export function useEvents(workspaceId) {
     [workspaceId],
   );
 
-  // ── Participant operations ───────────────────────
-
-  const addParticipant = useCallback(
-    async (eventId, participantId) => {
-      const { data } = await api.post(
-        `/workspaces/${workspaceId}/events/${eventId}/participants`,
-        { participantId },
-      );
-      return data.data.event;
-    },
-    [workspaceId],
-  );
-
-  const removeParticipant = useCallback(
-    async (eventId, participantId) => {
-      const { data } = await api.delete(
-        `/workspaces/${workspaceId}/events/${eventId}/participants/${participantId}`,
-      );
-      return data.data.event;
-    },
-    [workspaceId],
-  );
-
   // ── Event tasks ──────────────────────────────────
 
   const getEventTasks = useCallback(
@@ -224,8 +185,6 @@ export function useEvents(workspaceId) {
     updateEvent,
     deleteEvent,
     getEvent,
-    addParticipant,
-    removeParticipant,
     getEventTasks,
   };
 }

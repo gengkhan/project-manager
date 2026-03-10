@@ -8,6 +8,7 @@ const WorkspaceMember = require("../models/WorkspaceMember");
 const WorkspaceLabel = require("../models/WorkspaceLabel");
 const User = require("../models/User");
 const EventNote = require("../models/EventNote");
+const EventDivision = require("../models/EventDivision");
 const BrainstormingBoard = require("../models/BrainstormingBoard");
 const SpreadsheetSheetData = require("../models/SpreadsheetSheetData");
 const SpreadsheetWorkbook = require("../models/SpreadsheetWorkbook");
@@ -228,6 +229,28 @@ const _buildEventNoteContent = (note, eventTitle = "") => {
   return parts.join(" | ");
 };
 
+const _buildDivisionContent = (division, eventTitle = "") => {
+  const parts = [`Divisi: ${division.name}`];
+  if (eventTitle) parts.push(`Event: ${eventTitle}`);
+  if (division.description) parts.push(`Deskripsi: ${division.description}`);
+
+  if (division.members && division.members.length > 0) {
+    const memberParts = division.members
+      .map((m) => {
+        const name =
+          typeof m.userId === "object" && m.userId?.name
+            ? m.userId.name
+            : m.userId;
+        const role = m.role === "leader" ? " (leader)" : "";
+        return `${name}${role}`;
+      })
+      .filter(Boolean);
+    if (memberParts.length > 0) parts.push(`Anggota: ${memberParts.join(", ")}`);
+  }
+
+  return parts.join(" | ");
+};
+
 // ════════════════════════════════════════════════════
 // UPSERT / REMOVE
 // ════════════════════════════════════════════════════
@@ -413,6 +436,30 @@ const syncWorkspace = async (workspaceId) => {
     counts.event_note++;
   }
 
+  // 2.7 Event Divisions
+  const divisions = await EventDivision.find({
+    workspaceId,
+    isDeleted: { $ne: true },
+  })
+    .populate("members.userId", "name email")
+    .lean();
+
+  counts.division = 0;
+  for (const div of divisions) {
+    const evTitle = eventTitleMap[div.eventId.toString()] || "";
+    await upsert({
+      workspaceId,
+      sourceType: "division",
+      sourceId: div._id,
+      content: _buildDivisionContent(div, evTitle),
+      metadata: {
+        title: div.name,
+        sourceUrl: `/workspace/${workspaceId}/events/${div.eventId}`,
+      },
+    });
+    counts.division++;
+  }
+
   // 3. Comments (only from this workspace)
   const comments = await Comment.find({ workspaceId, isDeleted: false }).lean();
 
@@ -569,4 +616,5 @@ module.exports = {
   _buildBoardContent,
   _buildLabelContent,
   _buildEventNoteContent,
+  _buildDivisionContent,
 };

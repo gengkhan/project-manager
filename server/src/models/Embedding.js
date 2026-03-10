@@ -14,6 +14,8 @@ const embeddingSchema = new mongoose.Schema(
       enum: [
         "task",
         "event",
+        "event_note",
+        "division",
         "comment",
         "activity",
         "member",

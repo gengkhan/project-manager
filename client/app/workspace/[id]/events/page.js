@@ -219,7 +219,6 @@ export default function EventsPage({ params }) {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onCreate={handleCreate}
-        members={members}
       />
     </div>
   );

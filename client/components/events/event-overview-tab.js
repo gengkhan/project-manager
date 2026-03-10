@@ -13,8 +13,6 @@ import { id as localeId } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   Popover,
@@ -29,22 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { EventDivisionsSection } from "@/components/events/event-divisions-section";
 import {
   CalendarIcon,
   Palette,
-  Users,
   Check,
-  X,
   Pencil,
-  Plus,
   Loader2,
-  UserPlus,
-  UserMinus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -95,16 +84,13 @@ const STATUS_CONFIG = {
 export function EventOverviewTab({
   event,
   onUpdate,
-  onAddParticipant,
-  onRemoveParticipant,
   members = [],
+  workspaceId,
 }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [title, setTitle] = useState(event.title);
   const [saving, setSaving] = useState(false);
-  const [participantSearch, setParticipantSearch] = useState("");
-  const [showParticipantAdd, setShowParticipantAdd] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const descValueRef = useRef(event.description || "");
   const descTimerRef = useRef(null);
@@ -161,41 +147,7 @@ export function EventOverviewTab({
     setEditingDesc(false);
   }, [event.description, saveField]);
 
-  const handleAddParticipant = async (userId) => {
-    try {
-      await onAddParticipant(userId);
-      setParticipantSearch("");
-      setShowParticipantAdd(false);
-      toast.success("Peserta ditambahkan");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Gagal menambahkan peserta");
-    }
-  };
-
-  const handleRemoveParticipant = async (userId) => {
-    try {
-      await onRemoveParticipant(userId);
-      toast.success("Peserta dihapus");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Gagal menghapus peserta");
-    }
-  };
-
   const statusConfig = STATUS_CONFIG[event.status] || STATUS_CONFIG.upcoming;
-
-  // Non-participant members for adding
-  const participantIds = event.participants?.map((p) => p._id) || [];
-  const availableMembers = members.filter((m) => {
-    const userId = typeof m.userId === "object" ? m.userId?._id : m.userId;
-    const userName = typeof m.userId === "object" ? m.userId?.name : m.name;
-    const userEmail = typeof m.userId === "object" ? m.userId?.email : m.email;
-
-    return (
-      !participantIds.includes(userId) &&
-      (userName?.toLowerCase().includes(participantSearch.toLowerCase()) ||
-        userEmail?.toLowerCase().includes(participantSearch.toLowerCase()))
-    );
-  });
 
   return (
     <div className="space-y-6">
@@ -439,123 +391,12 @@ export function EventOverviewTab({
         </CardContent>
       </Card>
 
-      {/* Participants card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="h-4 w-4" />
-              Peserta ({event.participants?.length || 0})
-            </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1 text-xs"
-              onClick={() => setShowParticipantAdd(!showParticipantAdd)}
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              Tambah
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Add participant section */}
-          {showParticipantAdd && (
-            <div className="space-y-2 pb-3 border-b">
-              <Input
-                placeholder="Cari member untuk ditambahkan..."
-                value={participantSearch}
-                onChange={(e) => setParticipantSearch(e.target.value)}
-                className="h-8 text-sm"
-                autoFocus
-              />
-              {availableMembers.length > 0 ? (
-                <div className="max-h-36 overflow-y-auto space-y-0.5">
-                  {availableMembers.slice(0, 8).map((m) => (
-                    <button
-                      key={
-                        typeof m.userId === "object" ? m.userId?._id : m.userId
-                      }
-                      onClick={() =>
-                        handleAddParticipant(
-                          typeof m.userId === "object"
-                            ? m.userId?._id
-                            : m.userId,
-                        )
-                      }
-                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left hover:bg-accent transition-colors"
-                    >
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
-                          {(typeof m.userId === "object"
-                            ? m.userId?.name
-                            : m.name
-                          )
-                            ?.charAt(0)
-                            .toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">
-                          {typeof m.userId === "object"
-                            ? m.userId?.name
-                            : m.name}
-                        </p>
-                      </div>
-                      <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  {participantSearch
-                    ? "Tidak ada member ditemukan"
-                    : "Semua member sudah menjadi peserta"}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Participant list */}
-          {event.participants?.length > 0 ? (
-            <div className="space-y-1">
-              {event.participants.map((p) => (
-                <div
-                  key={p._id}
-                  className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 group transition-colors"
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs bg-primary/10 text-primary font-medium">
-                      {p.name?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{p.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {p.email}
-                    </p>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleRemoveParticipant(p._id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 hover:text-destructive transition-all"
-                      >
-                        <UserMinus className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>Hapus peserta</TooltipContent>
-                  </Tooltip>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Belum ada peserta. Klik "Tambah" untuk menambahkan member.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Divisions section */}
+      <EventDivisionsSection
+        event={event}
+        workspaceId={workspaceId}
+        members={members}
+      />
     </div>
   );
 }

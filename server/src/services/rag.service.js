@@ -116,6 +116,8 @@ const buildContext = (documents) => {
   const typeLabels = {
     task: "📋 Task",
     event: "📅 Event",
+    event_note: "📝 Catatan Event",
+    division: "👥 Divisi",
     comment: "💬 Komentar",
     activity: "📝 Aktivitas",
     member: "👤 Member",
