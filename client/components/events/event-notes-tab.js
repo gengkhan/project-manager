@@ -39,13 +39,24 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 
-function NoteForm({ workspaceId, initialTitle, initialContent, onSave, onCancel, saving }) {
+function NoteForm({
+  workspaceId,
+  initialTitle,
+  initialContent,
+  onSave,
+  onCancel,
+  saving,
+}) {
   const [title, setTitle] = useState(initialTitle || "");
   const [content, setContent] = useState(initialContent || "");
   const [mentions, setMentions] = useState([]);
 
   const handleSave = () => {
-    if (!content || content === "[]" || content === '[{"type":"paragraph","content":[]}]') {
+    if (
+      !content ||
+      content === "[]" ||
+      content === '[{"type":"paragraph","content":[]}]'
+    ) {
       toast.error("Isi catatan tidak boleh kosong");
       return;
     }
@@ -62,7 +73,7 @@ function NoteForm({ workspaceId, initialTitle, initialContent, onSave, onCancel,
           maxLength={200}
           className="font-medium"
         />
-        <div className="min-h-[120px] border rounded-md overflow-hidden">
+        <div className="min-h-[240px] border rounded-md py-2 px-6">
           <MentionEditor
             workspaceId={workspaceId}
             initialContent={initialContent}
@@ -74,7 +85,12 @@ function NoteForm({ workspaceId, initialTitle, initialContent, onSave, onCancel,
           />
         </div>
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={saving}
+          >
             <X className="h-4 w-4 mr-1" />
             Batal
           </Button>
@@ -88,7 +104,14 @@ function NoteForm({ workspaceId, initialTitle, initialContent, onSave, onCancel,
   );
 }
 
-function NoteCard({ note, workspaceId, currentUserId, memberRole, onEdit, onDelete }) {
+function NoteCard({
+  note,
+  workspaceId,
+  currentUserId,
+  memberRole,
+  onEdit,
+  onDelete,
+}) {
   const isAuthor = note.authorId?._id === currentUserId;
   const canModify = isAuthor || ["owner", "admin"].includes(memberRole);
   const authorName = note.authorId?.name || "Unknown";
@@ -148,7 +171,10 @@ function NoteCard({ note, workspaceId, currentUserId, memberRole, onEdit, onDele
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(note)} className="gap-2">
+                <DropdownMenuItem
+                  onClick={() => onEdit(note)}
+                  className="gap-2"
+                >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </DropdownMenuItem>
@@ -170,8 +196,10 @@ function NoteCard({ note, workspaceId, currentUserId, memberRole, onEdit, onDele
 
 export function EventNotesTab({ event, workspaceId, members, memberRole }) {
   const { user } = useAuth();
-  const { notes, loading, createNote, updateNote, deleteNote } =
-    useEventNotes(workspaceId, event._id);
+  const { notes, loading, createNote, updateNote, deleteNote } = useEventNotes(
+    workspaceId,
+    event._id,
+  );
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
