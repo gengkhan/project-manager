@@ -73,6 +73,7 @@ const commentRoutes = require("./routes/comment.routes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
 const pushRoutes = require("./routes/push.routes");
 const spreadsheetRoutes = require("./routes/spreadsheet.routes");
+const eventNoteRoutes = require("./routes/eventNote.routes");
 const embeddingRoutes = require("./routes/embedding.routes");
 const copilotkitRoutes = require("./routes/copilotkit.routes");
 
@@ -83,6 +84,7 @@ app.use("/api/workspaces/:id/tasks", taskRoutes);
 app.use("/api/workspaces/:id/labels", labelRoutes);
 app.use("/api/workspaces/:id/calendar", calendarRoutes);
 app.use("/api/workspaces/:id/events", eventRoutes);
+app.use("/api/workspaces/:id/events/:eventId/notes", eventNoteRoutes);
 app.use("/api/workspaces/:id/activity", activityRoutes);
 app.use("/api/workspaces/:id/dashboard", dashboardRoutes);
 app.use("/api/workspaces/:id/export", exportRoutes);

@@ -10,6 +10,7 @@ import { EventOverviewTab } from "@/components/events/event-overview-tab";
 import { EventTasksTab } from "@/components/events/event-tasks-tab";
 import { EventSpreadsheetTab } from "@/components/spreadsheet/event-spreadsheet-tab";
 import { EventActivityTab } from "@/components/activity/event-activity-tab";
+import { EventNotesTab } from "@/components/events/event-notes-tab";
 import { DeleteEventDialog } from "@/components/events/delete-event-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ import {
   Loader2,
   FileText,
   Download,
+  StickyNote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -270,7 +272,7 @@ export default function EventDetailPage({ params }) {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="w-full grid grid-cols-4 h-10">
+        <TabsList className="w-full grid grid-cols-5 h-10">
           <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm">
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Overview</span>
@@ -283,6 +285,10 @@ export default function EventDetailPage({ params }) {
                 {event.taskCount}
               </span>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="gap-1.5 text-xs sm:text-sm">
+            <StickyNote className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Notes</span>
           </TabsTrigger>
           <TabsTrigger
             value="spreadsheet"
@@ -314,6 +320,16 @@ export default function EventDetailPage({ params }) {
             event={event}
             workspaceId={id}
             workspace={currentWorkspace}
+          />
+        </TabsContent>
+
+        {/* Tab: Notes */}
+        <TabsContent value="notes" className="mt-0">
+          <EventNotesTab
+            event={event}
+            workspaceId={id}
+            members={members}
+            memberRole={currentWorkspace?.role}
           />
         </TabsContent>
 

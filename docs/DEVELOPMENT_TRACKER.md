@@ -194,6 +194,25 @@
 - [x] **Frontend**: Relasi task-event (field event di task, warna di kalender)
 - [ ] **Test**: Unit test event API
 
+### 2.5 Event Notes / Catatan Event (Ref: `24-event-notes.md`)
+
+- [x] **Model**: Buat schema `event_notes`
+- [x] **API**: `GET /api/workspaces/:id/events/:eventId/notes` — Daftar catatan (paginated)
+- [x] **API**: `POST /api/workspaces/:id/events/:eventId/notes` — Buat catatan
+- [x] **API**: `GET /api/workspaces/:id/events/:eventId/notes/:noteId` — Detail catatan
+- [x] **API**: `PUT /api/workspaces/:id/events/:eventId/notes/:noteId` — Update catatan
+- [x] **API**: `DELETE /api/workspaces/:id/events/:eventId/notes/:noteId` — Hapus catatan (soft)
+- [x] **Socket.io**: Event note events (created, updated, deleted)
+- [x] **Integrasi**: Mention → NotificationService (in-app + WhatsApp)
+- [x] **Integrasi**: ActivityLogService (create, update, delete)
+- [x] **Integrasi**: EmbeddingService — RAG indexing (`event_note` source type)
+- [x] **Frontend**: Hook `useEventNotes` (CRUD + real-time Socket.io sync)
+- [x] **Frontend**: Komponen `EventNotesTab` (list, create, edit inline, delete)
+- [x] **Frontend**: Tab "Notes" di halaman detail event (5 tab: Overview, Task, Notes, Spreadsheet, Activity)
+- [x] **Frontend**: MentionEditor integrasi (BlockNote + @mention)
+- [x] **Frontend**: MentionReadOnly untuk tampilan baca
+- [ ] **Test**: Unit test event notes API
+
 ---
 
 ## Fase 3 — Event Spreadsheet & Activity Log (Estimasi 4–5 Minggu)

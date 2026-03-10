@@ -7,6 +7,7 @@ const ActivityLog = require("../models/ActivityLog");
 const WorkspaceMember = require("../models/WorkspaceMember");
 const WorkspaceLabel = require("../models/WorkspaceLabel");
 const User = require("../models/User");
+const EventNote = require("../models/EventNote");
 const BrainstormingBoard = require("../models/BrainstormingBoard");
 const SpreadsheetSheetData = require("../models/SpreadsheetSheetData");
 const SpreadsheetWorkbook = require("../models/SpreadsheetWorkbook");
@@ -208,6 +209,25 @@ const _buildLabelContent = (label) => {
   return `Label: ${label.name} | Warna: ${label.color}`;
 };
 
+const _buildEventNoteContent = (note, eventTitle = "") => {
+  const parts = [`Catatan Event${eventTitle ? `: ${eventTitle}` : ""}`];
+  if (note.title) parts.push(`Judul: ${note.title}`);
+  let content = note.content || "";
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) {
+      content = parsed
+        .map((block) => block.content?.map((c) => c.text).join("") || "")
+        .filter(Boolean)
+        .join(" ");
+    }
+  } catch {
+    // Not JSON — use raw text
+  }
+  if (content) parts.push(`Isi: ${content.substring(0, 500)}`);
+  return parts.join(" | ");
+};
+
 // ════════════════════════════════════════════════════
 // UPSERT / REMOVE
 // ════════════════════════════════════════════════════
@@ -218,7 +238,7 @@ const _buildLabelContent = (label) => {
  *
  * @param {Object} params
  * @param {string} params.workspaceId
- * @param {string} params.sourceType - task|event|comment|activity|member|spreadsheet|board|label
+ * @param {string} params.sourceType - task|event|event_note|comment|activity|member|spreadsheet|board|label
  * @param {string} params.sourceId
  * @param {string} params.content - teks yang akan di-embed
  * @param {Object} [params.metadata] - metadata tambahan
@@ -315,6 +335,7 @@ const syncWorkspace = async (workspaceId) => {
   const counts = {
     task: 0,
     event: 0,
+    event_note: 0,
     comment: 0,
     activity: 0,
     member: 0,
@@ -364,6 +385,32 @@ const syncWorkspace = async (workspaceId) => {
       },
     });
     counts.event++;
+  }
+
+  // 2.5 Event Notes
+  const eventNotes = await EventNote.find({
+    workspaceId,
+    isDeleted: { $ne: true },
+  }).lean();
+
+  const eventTitleMap = {};
+  for (const ev of events) {
+    eventTitleMap[ev._id.toString()] = ev.title;
+  }
+
+  for (const note of eventNotes) {
+    const evTitle = eventTitleMap[note.eventId.toString()] || "";
+    await upsert({
+      workspaceId,
+      sourceType: "event_note",
+      sourceId: note._id,
+      content: _buildEventNoteContent(note, evTitle),
+      metadata: {
+        title: note.title || "Catatan",
+        sourceUrl: `/workspace/${workspaceId}/events/${note.eventId}`,
+      },
+    });
+    counts.event_note++;
   }
 
   // 3. Comments (only from this workspace)
@@ -521,4 +568,5 @@ module.exports = {
   _buildSpreadsheetContent,
   _buildBoardContent,
   _buildLabelContent,
+  _buildEventNoteContent,
 };
