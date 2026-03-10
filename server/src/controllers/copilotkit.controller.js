@@ -15,9 +15,9 @@ exports.handleCopilotRequest = catchAsync(async (req, res, next) => {
     return next(new AppError("Workspace context is required", 400));
   }
 
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) {
-    return next(new AppError("GOOGLE_API_KEY is not configured", 500));
+    return next(new AppError("GOOGLE_AI_API_KEY is not configured", 500));
   }
 
   const serviceAdapter = new GoogleGenerativeAIAdapter({
