@@ -1,8 +1,8 @@
 const {
   CopilotRuntime,
   GoogleGenerativeAIAdapter,
-} = require("@copilotkit/backend");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+  copilotRuntimeNodeHttpEndpoint,
+} = require("@copilotkit/runtime");
 const AIActionsService = require("../services/aiActions.service");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
@@ -15,11 +15,14 @@ exports.handleCopilotRequest = catchAsync(async (req, res, next) => {
     return next(new AppError("Workspace context is required", 400));
   }
 
-  // Setup Gemini Google Generative AI Adapter
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-  // We can pass the model instances directly or just use the adapter defaults
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    return next(new AppError("GOOGLE_API_KEY is not configured", 500));
+  }
+
   const serviceAdapter = new GoogleGenerativeAIAdapter({
-    model: "gemini-2.0-flash", // Use 2.0 or 1.5 flash
+    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    apiKey,
   });
 
   const runtime = new CopilotRuntime({
@@ -68,7 +71,7 @@ exports.handleCopilotRequest = catchAsync(async (req, res, next) => {
           {
             name: "description",
             type: "string",
-            description: "Deskripti task opsional.",
+            description: "Deskripsi task opsional.",
             required: false,
           },
           {
@@ -220,6 +223,11 @@ exports.handleCopilotRequest = catchAsync(async (req, res, next) => {
     ],
   });
 
-  // Execute Stream
-  await runtime.streamHttpServerResponse(req, res, serviceAdapter);
+  const handler = copilotRuntimeNodeHttpEndpoint({
+    runtime,
+    serviceAdapter,
+    endpoint: req.originalUrl,
+  });
+
+  await handler(req, res);
 });

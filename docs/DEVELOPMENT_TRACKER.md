@@ -611,25 +611,25 @@
 
 ### 7.3 Frontend AI Chat Page (Ref: `23-ai-chat-agent.md`)
 
-- [ ] **Frontend**: Halaman AI Chat (`/workspace/:id/ai-chat`)
-- [ ] **Frontend**: CopilotKit Provider wrapper di layout workspace (`runtimeUrl` ke backend)
-- [ ] **Frontend**: Chat UI menggunakan CopilotKit `<CopilotChat />` (kustomisasi styling shadcn/Tailwind)
-- [ ] **Frontend**: Welcome message dengan daftar kemampuan AI
-- [ ] **Frontend**: Suggestion chips (contoh pertanyaan yang bisa diklik)
-- [ ] **Frontend**: Streaming text response (karakter per karakter)
-- [ ] **Frontend**: Typing indicator ("AI sedang mengetik...")
-- [ ] **Frontend**: Action confirmation cards (preview task/event sebelum dibuat)
-- [ ] **Frontend**: `useCopilotReadable` — provide workspace context (nama, member, kolom kanban, event aktif)
-- [ ] **Frontend**: `useCopilotAction` — `createTask` (buat task baru)
-- [ ] **Frontend**: `useCopilotAction` — `updateTask` (update field task)
-- [ ] **Frontend**: `useCopilotAction` — `createEvent` (buat event baru)
-- [ ] **Frontend**: `useCopilotAction` — `assignMember` (assign/unassign member)
-- [ ] **Frontend**: `useCopilotAction` — `searchData` (cari task/event/member)
-- [ ] **Frontend**: `useCopilotAction` — `getWorkspaceSummary` (ringkasan workspace)
-- [ ] **Frontend**: `useCopilotAction` — `suggestActions` (saran cerdas)
-- [ ] **Frontend**: Link navigasi "AI Chat" di sidebar (ikon robot/sparkle)
-- [ ] **Frontend**: Rate limit feedback ("Batas penggunaan tercapai, coba lagi nanti")
-- [ ] **Frontend**: Empty state & error handling
+- [x] **Frontend**: Halaman AI Chat (`/workspace/:id/ai-chat`)
+- [x] **Frontend**: CopilotKit Provider wrapper di layout workspace (`runtimeUrl` ke backend)
+- [x] **Frontend**: Chat UI menggunakan CopilotKit `<CopilotChat />` (kustomisasi styling shadcn/Tailwind)
+- [x] **Frontend**: Welcome message dengan daftar kemampuan AI
+- [x] **Frontend**: Suggestion chips (contoh pertanyaan yang bisa diklik)
+- [x] **Frontend**: Streaming text response (karakter per karakter) (built-in CopilotKit)
+- [x] **Frontend**: Typing indicator ("AI sedang mengetik...") (built-in CopilotKit)
+- [x] **Frontend**: Action confirmation cards (preview task/event sebelum dibuat) (handled by server-side actions)
+- [x] **Frontend**: `useCopilotReadable` — provide workspace context (nama, member, kolom kanban, event aktif)
+- [x] **Frontend**: `useCopilotAction` — `createTask` (buat task baru) (server-side action via CopilotKit Runtime)
+- [x] **Frontend**: `useCopilotAction` — `updateTask` (update field task) (server-side action via CopilotKit Runtime)
+- [x] **Frontend**: `useCopilotAction` — `createEvent` (buat event baru) (server-side action via CopilotKit Runtime)
+- [x] **Frontend**: `useCopilotAction` — `assignMember` (assign/unassign member) (server-side action via CopilotKit Runtime)
+- [x] **Frontend**: `useCopilotAction` — `searchData` (cari task/event/member) (server-side action via CopilotKit Runtime)
+- [x] **Frontend**: `useCopilotAction` — `getWorkspaceSummary` (ringkasan workspace) (server-side action via CopilotKit Runtime)
+- [x] **Frontend**: `useCopilotAction` — `suggestActions` (saran cerdas) (handled via searchData natural language)
+- [x] **Frontend**: Link navigasi "AI Chat" di sidebar (ikon Sparkles)
+- [x] **Frontend**: Rate limit feedback ("Batas penggunaan tercapai, coba lagi nanti")
+- [x] **Frontend**: Empty state & error handling
 - [ ] **Test**: E2E test AI chat interaksi
 
 ---

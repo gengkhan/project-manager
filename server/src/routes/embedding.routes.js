@@ -6,7 +6,7 @@ const { requireRole } = require("../middlewares/rbac");
 
 // Semua endpoint memerlukan autentikasi + workspace membership + Admin+
 router.use(auth);
-router.use(requireRole("admin"));
+router.use(requireRole("owner", "admin"));
 
 // POST /api/workspaces/:id/embeddings/sync — Trigger manual re-index
 router.post("/sync", embeddingController.syncEmbeddings);

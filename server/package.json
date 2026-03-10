@@ -9,9 +9,9 @@
   },
   "dependencies": {
     "@ag-ui/core": "^0.0.47",
-    "@copilotkit/backend": "^0.37.0",
-    "@copilotkit/shared": "^1.53.0",
+    "@copilotkit/runtime": "^1.53.0",
     "@google/generative-ai": "^0.24.1",
+    "@langchain/google-gauth": "^2.1.24",
     "baileys": "^7.0.0-rc.9",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
