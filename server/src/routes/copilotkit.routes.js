@@ -7,9 +7,8 @@ const { aiChatLimiter } = require("../middlewares/rateLimiter");
 
 router.use(auth);
 
-// Copilot endpoint is protected, and limited to members (admin/member, not guest if we want to block them)
-// we use requireRole which already includes membership check
-// router.use(requireRole("admin", "owner", "member"));
+// Copilot endpoint is protected, and limited to workspace members
+router.use(requireRole("admin", "owner", "member"));
 router.use(aiChatLimiter);
 
 // Runtime handles both GET (e.g. schema/health) and POST (chat); accept all methods
