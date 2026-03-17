@@ -5,7 +5,37 @@ import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { useAiChatContext } from "@/hooks/use-ai-chat";
+import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
+
+/** Derive user-friendly error message for toast notification */
+function getErrorMessage(error) {
+  const msg =
+    error?.message ||
+    error?.error?.message ||
+    (typeof error?.error === "string" ? error.error : null) ||
+    String(error);
+  if (msg.includes("429") || error?.status === 429) {
+    return "Batas penggunaan tercapai. Coba lagi nanti.";
+  }
+  if (
+    msg.includes("quota") ||
+    msg.includes("Quota exceeded") ||
+    msg.includes("exceeded your current quota")
+  ) {
+    return "Kuota API telah habis. Periksa billing atau coba lagi nanti.";
+  }
+  if (msg.includes("AI_RetryError") || msg.includes("Failed after")) {
+    if (msg.includes("quota") || msg.includes("Quota exceeded")) {
+      return "Kuota API telah habis. Coba lagi nanti.";
+    }
+    return "Terjadi kesalahan AI. Silakan coba lagi.";
+  }
+  if (msg.includes("rate") && msg.includes("limit")) {
+    return "Terlalu banyak permintaan. Mohon tunggu sebentar.";
+  }
+  return "Terjadi kesalahan pada AI Chat. Silakan coba lagi.";
+}
 
 const SYSTEM_INSTRUCTIONS = `Kamu adalah AI asisten untuk workspace ini di aplikasi Project Management.
 Kamu hanya mengetahui data dari workspace yang sedang aktif.
@@ -45,10 +75,10 @@ const SUGGESTION_CHIPS = [
     title: "Event mendatang",
     message: "Event apa saja yang akan datang dalam waktu dekat?",
   },
-  {
-    title: "Buat task baru",
-    message: "Buatkan task baru dengan judul ",
-  },
+  // {
+  //   title: "Buat task baru",
+  //   message: "Buatkan task baru dengan judul ",
+  // },
   {
     title: "Saran prioritas",
     message: "Task mana yang sebaiknya diprioritaskan saat ini?",
@@ -104,6 +134,7 @@ export default function AiChatPage({ params }) {
           suggestions={SUGGESTION_CHIPS}
           className="h-full"
           onError={(error) => {
+            toast.error(getErrorMessage(error));
             if (error?.message?.includes("429") || error?.status === 429) {
               return "Batas penggunaan tercapai. Coba lagi nanti.";
             }

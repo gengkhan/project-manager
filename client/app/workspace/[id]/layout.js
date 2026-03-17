@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useMemo } from "react";
+import { useEffect, useState, use, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/protected-route";
@@ -9,6 +9,7 @@ import { useWorkspace } from "@/contexts/workspace-context";
 import { connectSocket, disconnectSocket, getSocket } from "@/lib/socket";
 import { getApiUrl, onServerSwitch } from "@/lib/server-manager";
 import { useNotifications } from "@/hooks/use-notifications";
+import { toast } from "sonner";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -176,6 +177,25 @@ export default function WorkspaceLayout({ children, params }) {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
+  const handleCopilotError = useCallback((error) => {
+    const msg =
+      error?.message ||
+      error?.error?.message ||
+      error?.context?.message ||
+      String(error);
+    if (
+      msg.includes("quota") ||
+      msg.includes("Quota exceeded") ||
+      msg.includes("exceeded your current quota")
+    ) {
+      toast.error("Kuota API telah habis. Periksa billing atau coba lagi nanti.");
+    } else if (msg.includes("429") || msg.includes("rate") || msg.includes("limit")) {
+      toast.error("Batas penggunaan tercapai. Coba lagi nanti.");
+    } else {
+      toast.error("Terjadi kesalahan pada AI Chat. Silakan coba lagi.");
+    }
+  }, []);
+
   // Load workspace and connect socket
   useEffect(() => {
     async function load() {
@@ -235,7 +255,11 @@ export default function WorkspaceLayout({ children, params }) {
 
   return (
     <ProtectedRoute>
-      <CopilotKit runtimeUrl={copilotRuntimeUrl} headers={copilotHeaders}>
+      <CopilotKit
+        runtimeUrl={copilotRuntimeUrl}
+        headers={copilotHeaders}
+        onError={handleCopilotError}
+      >
         <SidebarProvider>
           <AppSidebar workspaceId={id} workspace={currentWorkspace} />
           <SidebarInset className="relative">
