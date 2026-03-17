@@ -80,6 +80,14 @@ const userSchema = new mongoose.Schema(
       type: Array, // Array of push subscription objects
       default: [],
     },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

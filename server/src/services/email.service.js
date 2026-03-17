@@ -54,6 +54,32 @@ class EmailService {
       html,
     });
   }
+
+  async sendEmailVerificationEmail(email, verificationUrl) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1a73e8;">Verifikasi Email</h2>
+        <p>Hai,</p>
+        <p>Terima kasih sudah mendaftar. Klik tombol di bawah untuk memverifikasi email kamu dan mengaktifkan akun:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" 
+             style="background-color: #1a73e8; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-size: 16px; display: inline-block;">
+            Verifikasi Email
+          </a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Tautan ini berlaku selama <strong>24 jam</strong>. Jika kamu tidak merasa mendaftar, abaikan email ini.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #999; font-size: 12px;">YukNgaji Surabaya</p>
+      </div>
+    `;
+
+    return this.sendMail({
+      to: email,
+      subject: "Verifikasi Email — YukNgaji Surabaya",
+      html,
+    });
+  }
+
   async sendWorkspaceInvitationEmail(
     email,
     inviterName,

@@ -52,8 +52,6 @@ export function AuthProvider({ children }) {
       password,
       confirmPassword,
     });
-    localStorage.setItem("accessToken", data.accessToken);
-    setUser(data.user);
     return data;
   };
 
@@ -78,6 +76,16 @@ export function AuthProvider({ children }) {
       password,
       confirmPassword,
     });
+    return data;
+  };
+
+  const verifyEmail = async (token) => {
+    const { data } = await api.post("/auth/verify-email", { token });
+    return data;
+  };
+
+  const resendVerification = async (email) => {
+    const { data } = await api.post("/auth/resend-verification", { email });
     return data;
   };
 
@@ -136,6 +144,8 @@ export function AuthProvider({ children }) {
         logout,
         forgotPassword,
         resetPassword,
+        verifyEmail,
+        resendVerification,
         checkAuth,
         updateProfile,
         changePassword,

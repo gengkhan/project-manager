@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const PasswordResetToken = require("../models/PasswordResetToken");
+const EmailVerificationToken = require("../models/EmailVerificationToken");
 const emailService = require("../services/email.service");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
@@ -61,19 +62,20 @@ exports.register = catchAsync(async (req, res, next) => {
   // Buat user
   const user = await User.create({ name, email, password });
 
-  // Generate tokens
-  const { accessToken, refreshToken } = generateTokens(user._id, user.email);
-  setRefreshTokenCookie(res, refreshToken);
+  // Buat token verifikasi + kirim email
+  const { rawToken } = await EmailVerificationToken.createToken(user._id);
+  const verificationUrl = `${process.env.APP_BASE_URL}/verify-email/${rawToken}`;
+
+  try {
+    await emailService.sendEmailVerificationEmail(user.email, verificationUrl);
+  } catch (error) {
+    await EmailVerificationToken.deleteMany({ userId: user._id, usedAt: null });
+    return next(new AppError("Gagal mengirim email. Coba lagi nanti.", 500));
+  }
 
   res.status(201).json({
     status: "success",
-    accessToken,
-    user: {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-    },
+    message: "Akun berhasil dibuat. Silakan cek email untuk verifikasi.",
   });
 });
 
@@ -91,6 +93,14 @@ exports.login = catchAsync(async (req, res, next) => {
   const user = await User.findOne({ email }).select("+password");
   if (!user || !(await user.comparePassword(password))) {
     return next(new AppError("Email atau password salah", 401));
+  }
+
+  if (!user.emailVerified) {
+    return res.status(403).json({
+      status: "fail",
+      message: "Email belum diverifikasi. Silakan cek inbox kamu.",
+      emailNotVerified: true,
+    });
   }
 
   // Update lastActiveAt
@@ -111,6 +121,74 @@ exports.login = catchAsync(async (req, res, next) => {
       avatar: user.avatar,
     },
   });
+});
+
+// ──────────────────────────────────────────────
+// POST /api/auth/verify-email
+// ──────────────────────────────────────────────
+exports.verifyEmail = catchAsync(async (req, res, next) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return next(new AppError("Token harus diisi", 400));
+  }
+
+  const tokenDoc = await EmailVerificationToken.verifyToken(token);
+  if (!tokenDoc) {
+    return next(new AppError("Token tidak valid atau sudah expired", 400));
+  }
+
+  const user = await User.findById(tokenDoc.userId);
+  if (!user) {
+    return next(new AppError("User tidak ditemukan", 404));
+  }
+
+  user.emailVerified = true;
+  user.emailVerifiedAt = new Date();
+  await user.save({ validateBeforeSave: false });
+
+  tokenDoc.usedAt = new Date();
+  await tokenDoc.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Email berhasil diverifikasi. Silakan login.",
+  });
+});
+
+// ──────────────────────────────────────────────
+// POST /api/auth/resend-verification
+// ──────────────────────────────────────────────
+exports.resendVerification = catchAsync(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new AppError("Email harus diisi", 400));
+  }
+
+  const successMessage =
+    "Jika email terdaftar, tautan verifikasi telah dikirim";
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(200).json({ status: "success", message: successMessage });
+  }
+
+  if (user.emailVerified) {
+    return res.status(200).json({ status: "success", message: successMessage });
+  }
+
+  const { rawToken } = await EmailVerificationToken.createToken(user._id);
+  const verificationUrl = `${process.env.APP_BASE_URL}/verify-email/${rawToken}`;
+
+  try {
+    await emailService.sendEmailVerificationEmail(user.email, verificationUrl);
+  } catch (error) {
+    await EmailVerificationToken.deleteMany({ userId: user._id, usedAt: null });
+    return next(new AppError("Gagal mengirim email. Coba lagi nanti.", 500));
+  }
+
+  res.status(200).json({ status: "success", message: successMessage });
 });
 
 // ──────────────────────────────────────────────

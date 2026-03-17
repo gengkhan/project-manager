@@ -18,17 +18,22 @@ import {
 } from "@/components/ui/card";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, resendVerification } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setInfo("");
+    setShowResend(false);
     setLoading(true);
 
     try {
@@ -36,13 +41,28 @@ export default function LoginPage() {
       router.push("/workspaces");
     } catch (err) {
       setError(err.response?.data?.message || "Terjadi kesalahan. Coba lagi.");
+      setShowResend(!!err.response?.data?.emailNotVerified);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResend = async () => {
+    setError("");
+    setInfo("");
+    setResendLoading(true);
+    try {
+      const data = await resendVerification(email);
+      setInfo(data?.message || "Tautan verifikasi telah dikirim.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Terjadi kesalahan. Coba lagi.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Masuk</CardTitle>
@@ -53,6 +73,11 @@ export default function LoginPage() {
             {error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
                 {error}
+              </div>
+            )}
+            {info && (
+              <div className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-sm p-3 rounded-md">
+                {info}
               </div>
             )}
             <div className="space-y-2">
@@ -102,6 +127,19 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            {showResend && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleResend}
+                disabled={resendLoading || !email}
+              >
+                {resendLoading
+                  ? "Mengirim..."
+                  : "Kirim ulang email verifikasi"}
+              </Button>
+            )}
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={loading}>
