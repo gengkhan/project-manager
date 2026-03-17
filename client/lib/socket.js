@@ -1,9 +1,8 @@
 import { io } from "socket.io-client";
-
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5555";
+import { getSocketUrl, onServerSwitch } from "./server-manager";
 
 let socket = null;
+let currentToken = null;
 
 /**
  * Inisialisasi koneksi Socket.io
@@ -11,8 +10,9 @@ let socket = null;
  */
 export const connectSocket = (token) => {
   if (socket?.connected) return socket;
+  currentToken = token;
 
-  socket = io(SOCKET_URL, {
+  socket = io(getSocketUrl(), {
     auth: { token },
     reconnection: true,
     reconnectionAttempts: 10,
@@ -35,6 +35,25 @@ export const connectSocket = (token) => {
   return socket;
 };
 
+onServerSwitch(() => {
+  if (!socket) return;
+  if (!currentToken) return;
+
+  try {
+    socket.disconnect();
+  } catch {
+    // ignore
+  }
+
+  socket = io(getSocketUrl(), {
+    auth: { token: currentToken },
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+  });
+});
+
 /**
  * Disconnect socket
  * Dipanggil saat user logout
@@ -44,6 +63,7 @@ export const disconnectSocket = () => {
     socket.disconnect();
     socket = null;
   }
+  currentToken = null;
 };
 
 /**

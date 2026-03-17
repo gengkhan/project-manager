@@ -7,6 +7,7 @@ import ProtectedRoute from "@/components/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { connectSocket, disconnectSocket, getSocket } from "@/lib/socket";
+import { getApiUrl, onServerSwitch } from "@/lib/server-manager";
 import { useNotifications } from "@/hooks/use-notifications";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -157,10 +158,15 @@ export default function WorkspaceLayout({ children, params }) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const isMobile = useIsMobile();
 
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => getApiUrl().replace(/\/$/, ""));
+
+  useEffect(() => {
+    return onServerSwitch(({ apiUrl }) => setApiBaseUrl((apiUrl || "").replace(/\/$/, "")));
+  }, []);
+
   const copilotRuntimeUrl = useMemo(() => {
-    const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5555/api").replace(/\/$/, "");
-    return `${base}/workspaces/${id}/copilotkit`;
-  }, [id]);
+    return `${apiBaseUrl}/workspaces/${id}/copilotkit`;
+  }, [apiBaseUrl, id]);
 
   const copilotHeaders = useMemo(() => {
     const token =
