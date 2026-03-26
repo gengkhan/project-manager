@@ -1,29 +1,28 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const logger = require("../utils/logger");
 
 class EmailService {
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT, 10),
-      secure: process.env.SMTP_PORT === "465",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+    this.from = process.env.EMAIL_FROM || "onboarding@resend.dev";
   }
 
   async sendMail({ to, subject, html }) {
     try {
-      const info = await this.transporter.sendMail({
-        from: process.env.EMAIL_FROM || "YukNgaji Surabaya <noreply@ynpm.com>",
+      const { data, error } = await this.resend.emails.send({
+        from: this.from,
         to,
         subject,
         html,
       });
-      logger.info(`Email terkirim ke ${to}: ${info.messageId}`);
-      return info;
+
+      if (error) {
+        logger.error(`Gagal mengirim email ke ${to}:`, error);
+        throw new Error(error.message);
+      }
+
+      logger.info(`Email terkirim ke ${to}: ${data.id}`);
+      return data;
     } catch (error) {
       logger.error(`Gagal mengirim email ke ${to}:`, error);
       throw error;
