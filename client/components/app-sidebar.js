@@ -59,11 +59,11 @@ const NAV_MAIN = [
     icon: Lightbulb,
     href: "/brainstorming",
   },
-  {
-    label: "AI Chat",
-    icon: Sparkles,
-    href: "/ai-chat",
-  },
+  // {
+  //   label: "AI Chat",
+  //   icon: Sparkles,
+  //   href: "/ai-chat",
+  // },
 ];
 
 const NAV_TASKS = [
